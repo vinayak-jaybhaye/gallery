@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  passwordAuthEnabled Boolean  @default(false)
+  passwordHash        String?
+  storageUsedBytes    BigInt   @default(0)
+  storageQuotaBytes   BigInt   @default(10737418240)
+  avatarUrl           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  media Media[]
+}
+
+model Media {
+  id              String      @id @default(uuid())
+  ownerId         String
+  type            MediaType
+  originalKey     String
+  masterKey       String?
+  thumbnailKey    String?
+  mimeType        String
+  sizeBytes       BigInt?
+  width           Int?
+  height          Int?
+  durationSeconds Int?
+  takenAt         DateTime?
+  title           String
+  status          MediaStatus
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  uploadSession UploadSession?
+
+  @@index([ownerId, status, createdAt(sort: Desc)])
+}
+
+model UploadSession {
+  id         String   @id @default(uuid())
+  mediaId    String   @unique
+  s3UploadId String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+enum MediaType {
+  image
+  video
+}
+
+enum MediaStatus {
+  uploading
+  processing
+  ready
+  deleted
+}

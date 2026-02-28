@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+@theme {
+  /* Backgrounds */
+  --color-bg-app: var(--bg-app);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-bg-muted: var(--bg-muted);
+
+  /* Surfaces */
+  --color-surface-default: var(--surface-default);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-selected: var(--surface-selected);
+
+  /* Text */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-inverse: var(--text-inverse);
+
+  /* Accent */
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+
+  /* Borders */
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+
+  /* Status */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+
+  /* Overlay / Disabled */
+  --color-overlay: var(--overlay);
+  --color-disabled: var(--disabled);
+
+  /* Fonts */
+  --font-body: var(--font-body);
+  --font-heading: var(--font-heading);
+  --font-ui: var(--font-ui);
+
+  /* Shadows */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  /* Destructive */
+  --color-bg-destructive: var(--bg-destructive);
+  --color-text-destructive-foreground: var(--text-destructive-foreground);
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+html,
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+@layer base {
+  :root {
+    /* Fonts - Defined globally for all themes */
+    --font-body: "Merriweather", serif;
+    --font-heading: "Inter", sans-serif;
+    --font-ui: "Inter", sans-serif;
+  }
+
+  .light {
+    /* Base / Light theme values */
+    --bg-app: #ffffff;
+    --bg-subtle: #f8fafc;
+    --bg-muted: #f1f5f9;
+
+    /* Surfaces */
+    --surface-default: #ffffff;
+    --surface-raised: #ffffff;
+    --surface-selected: #e2e8f0;
+
+    /* Text */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-inverse: #ffffff;
+
+    /* Accent */
+    --accent-primary: #2563eb;
+    --accent-soft: #dbeafe;
+    --accent-strong: #1d4ed8;
+
+    /* Borders */
+    --border-subtle: #e2e8f0;
+    --border-strong: #2563eb;
+
+    /* Status */
+    --success: #16a34a;
+    --warning: #d97706;
+    --error: #dc2626;
+    --info: #0284c7;
+
+    /* Overlay and Disabled */
+    --overlay: rgba(0, 0, 0, 0.5);
+    --disabled: #e5e7eb;
+
+    /* Destructive */
+    --bg-destructive: #ef4444;
+    --text-destructive-foreground: #ffffff;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark {
+    /* Background */
+    --bg-app: #020517;
+    /* near-black blue */
+    --bg-subtle: #020617;
+    --bg-muted: #1e293b;
+
+    /* Surfaces */
+    --surface-default: #020617;
+    --surface-raised: #020617;
+    --surface-selected: #020617;
+
+    /* Text */
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5f5;
+    --text-muted: #cbd5f5;
+    --text-inverse: #020617;
+
+    /* Accent */
+    --accent-primary: #6366f1;
+    /* indigo */
+    --accent-soft: #e0e7ff;
+    --accent-strong: #4f46e5;
+
+    /* Borders */
+    --border-subtle: #1e293b;
+    --border-strong: #6366f1;
+
+    /* Status */
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --info: #38bdf8;
+
+    /* Overlay & Disabled */
+    --overlay: rgba(0, 0, 0, 0.7);
+    --disabled: #334155;
+
+    /* Destructive */
+    --bg-destructive: #7f1d1d;
+    --text-destructive-foreground: #fef2f2;
+
+    /* Shadows (very subtle in dark mode) */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.8);
+  }
+}

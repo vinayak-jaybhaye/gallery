@@ -716,12 +716,10 @@ export async function removeAlbumShareService({
       );
     }
 
-    // Prevent removing owner
     if (targetUserId === userId) {
       throw new AppError("Cannot remove album owner", 400);
     }
 
-    // Ensure share exists
     const share = await tx.albumShare.findUnique({
       where: {
         albumId_userId: {
@@ -735,17 +733,23 @@ export async function removeAlbumShareService({
       throw new AppError("Share not found", 404);
     }
 
-    // Remove user's media from album
-    const userMediaInAlbum = await tx.albumMedia.findMany({
-      where: {
-        albumId,
-        media: {
-          ownerId: targetUserId,
-        },
-      },
-      select: { mediaId: true },
-    });
+    // check if cover is owned by user
+    let coverWillBeRemoved = false;
 
+    if (album.coverMediaId) {
+      const coverOwnedByUser = await tx.albumMedia.findFirst({
+        where: {
+          albumId,
+          mediaId: album.coverMediaId,
+          media: { ownerId: targetUserId },
+        },
+        select: { mediaId: true },
+      });
+
+      coverWillBeRemoved = !!coverOwnedByUser;
+    }
+
+    // Remove user's media
     await tx.albumMedia.deleteMany({
       where: {
         albumId,
@@ -755,13 +759,8 @@ export async function removeAlbumShareService({
       },
     });
 
-    // If cover was removed fix it
-    if (
-      album.coverMediaId &&
-      userMediaInAlbum.some(
-        (m) => m.mediaId === album.coverMediaId
-      )
-    ) {
+    // Fix cover if it was removed
+    if (coverWillBeRemoved) {
       const nextMedia = await tx.albumMedia.findFirst({
         where: { albumId },
         orderBy: { addedAt: "asc" },

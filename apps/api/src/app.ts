@@ -7,6 +7,11 @@ import uploadsRoutes from "@/modules/uploads/uploads.routes";
 import mediaRoutes from "@/modules/media/media.routes";
 import userRoutes from "@/modules/user/user.routes";
 import albumsRoutes from "@/modules/albums/albums.routes";
+import { asyncHandler } from "./utils/asyncHandler";
+import { validate } from "./middlewares/validate.middleware";
+import { publicTokenParamSchema } from "@/modules/media/media.schema";
+import { getPublicMediaByToken } from "@/modules/media/media.controller";
+
 
 const app = express();
 
@@ -28,6 +33,12 @@ app.use("/uploads", authMiddleware, uploadsRoutes);
 app.use("/media", authMiddleware, mediaRoutes);
 app.use("/user", authMiddleware, userRoutes);
 app.use("/albums", authMiddleware, albumsRoutes);
+
+app.get(
+  "/public/:token",
+  validate(publicTokenParamSchema),
+  asyncHandler(getPublicMediaByToken)
+);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

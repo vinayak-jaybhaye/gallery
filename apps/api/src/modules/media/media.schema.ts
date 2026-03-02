@@ -66,4 +66,74 @@ export const listDeletedMediaSchema = {
       .max(100)
       .optional(),
   }),
+}
+
+// sharing
+export const shareMediaSchema = {
+  params: z.object({
+    mediaId: z.uuid(),
+  }),
+  body: z.object({
+    email: z.email(),
+  }),
 };
+
+export const removeMediaShareSchema = {
+  params: z.object({
+    mediaId: z.uuid(),       // mediaId
+    userId: z.uuid(),   // target user
+  }),
+};
+
+export const createPublicShareSchema = {
+  params: z.object({
+    mediaId: z.uuid(), // mediaId
+  }),
+  body: z.object({
+    expiresInDays: z
+      .number()
+      .int()
+      .positive()
+      .max(365)
+      .optional(),
+  }),
+};
+
+export const revokePublicShareSchema = {
+  body: z.object({
+    shareIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(100)
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        { message: "Duplicate share IDs are not allowed" }
+      ),
+  }),
+};
+
+export const publicTokenParamSchema = {
+  params: z.object({
+    token: z
+      .string()
+      .min(32)
+      .max(128)
+      .regex(/^[a-f0-9]+$/i),
+  }),
+};
+
+export const listSharedWithMeSchema = {
+  query: z.object({
+    cursor: z.iso.datetime().optional(),
+    limit: z
+      .string()
+      .regex(/^\d+$/)
+      .transform(Number)
+      .refine((val) => val > 0 && val <= 100)
+      .optional(),
+  }),
+};
+
+export const listSharedByMeSchema = listSharedWithMeSchema;
+export const listMyPublicLinksSchema = listSharedWithMeSchema;
+export const sharesByIdSchema = mediaByIdParamSchema;

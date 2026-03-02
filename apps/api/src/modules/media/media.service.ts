@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { s3Client } from "@/lib/s3";
+import crypto from "crypto";
 import { AppError } from "@/middlewares/error.middleware";
 import {
   GetObjectCommand,
@@ -439,4 +440,400 @@ export async function deleteFromTrashService({
     success: true,
     deletedCount: media.length,
   };
+}
+
+// Media sharing services
+export async function shareMediaService({
+  userId,
+  mediaId,
+  email,
+}: {
+  userId: string;
+  mediaId: string;
+  email: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const media = await tx.media.findFirst({
+      where: {
+        id: mediaId,
+        ownerId: userId,
+        status: "ready",
+      },
+      select: { id: true },
+    });
+
+    if (!media) {
+      throw new AppError("Media not found", 404);
+    }
+
+    const targetUser = await tx.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, avatarUrl: true },
+    });
+
+    if (!targetUser) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (targetUser.id === userId) {
+      throw new AppError("Cannot share with yourself", 400);
+    }
+
+    await tx.mediaShare.upsert({
+      where: {
+        mediaId_userId: {
+          mediaId,
+          userId: targetUser.id,
+        },
+      },
+      create: {
+        mediaId,
+        userId: targetUser.id,
+      },
+      update: {},
+    });
+
+    return targetUser;
+  });
+}
+
+export async function removeMediaShareService({
+  userId,
+  mediaId,
+  targetUserId,
+}: {
+  userId: string;
+  mediaId: string;
+  targetUserId: string;
+}) {
+  const result = await prisma.mediaShare.deleteMany({
+    where: {
+      mediaId,
+      userId: targetUserId,
+      media: {
+        ownerId: userId,
+      },
+    },
+  });
+
+  if (result.count === 0) {
+    throw new AppError("Share not found or insufficient permissions", 404);
+  }
+
+  return { success: true };
+}
+
+export async function revokePublicShareService({
+  userId,
+  shareIds,
+}: {
+  userId: string;
+  shareIds: string[];
+}) {
+  if (!shareIds.length) {
+    throw new AppError("No share IDs provided", 400);
+  }
+
+  const result = await prisma.publicShare.deleteMany({
+    where: {
+      id: { in: shareIds },
+      media: {
+        ownerId: userId,
+      },
+    },
+  });
+
+  if (result.count === 0) {
+    throw new AppError("Public link not found", 404);
+  }
+
+  return {
+    success: true,
+    deletedCount: result.count,
+  };
+}
+
+export async function createPublicShareService({
+  userId,
+  mediaId,
+  expiresInDays,
+}: {
+  userId: string;
+  mediaId: string;
+  expiresInDays?: number;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const media = await tx.media.findFirst({
+      where: {
+        id: mediaId,
+        ownerId: userId,
+      },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+      },
+    });
+
+    if (!media) {
+      throw new AppError("Media not found", 404);
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    const expiresAt = expiresInDays
+      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+      : null;
+
+    // Ensure only one public link per media
+    await tx.publicShare.deleteMany({
+      where: { mediaId },
+    });
+
+    const share = await tx.publicShare.create({
+      data: {
+        mediaId,
+        token,
+        expiresAt,
+      },
+    });
+
+    return {
+      id: share.id,
+      token: share.token,
+      expiresAt: share.expiresAt,
+      createdAt: share.createdAt,
+      media,
+    };
+  });
+}
+
+export async function getPublicMediaByTokenService(token: string) {
+  const share = await prisma.publicShare.findUnique({
+    where: { token },
+    include: { media: true },
+  });
+
+  if (!share) {
+    throw new AppError("Invalid link", 404);
+  }
+
+  if (share.expiresAt && share.expiresAt < new Date()) {
+    throw new AppError("Link expired", 410);
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: share.media.masterKey ?? share.media.originalKey,
+  });
+
+  const signedUrl = await getSignedUrl(s3Client, command, {
+    expiresIn: 60 * 5,
+  });
+
+  return {
+    title: share.media.title,
+    mimeType: share.media.mimeType,
+    signedUrl,
+    expiresAt: share.expiresAt,
+  };
+}
+
+export async function listMediaSharedWithMeService({
+  userId,
+  cursor,
+  limit = 20,
+}: {
+  userId: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  const shares = await prisma.mediaShare.findMany({
+    where: { userId },
+    include: { media: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(cursor && {
+      cursor: { id: cursor },
+      skip: 1,
+    }),
+  });
+
+  let nextCursor: string | null = null;
+
+  if (shares.length > limit) {
+    const nextItem = shares.pop()!;
+    nextCursor = nextItem.id;
+  }
+
+  const items = await Promise.all(
+    shares.map(async (share) => {
+      const item = share.media;
+
+      let thumbnailUrl: string | null = null;
+
+      if (item.thumbnailKey) {
+        const command = new GetObjectCommand({
+          Bucket: BUCKET,
+          Key: item.thumbnailKey,
+        });
+
+        thumbnailUrl = await getSignedUrl(s3Client, command, {
+          expiresIn: 60 * 5,
+        });
+      }
+
+      return {
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        createdAt: item.createdAt,
+        takenAt: item.takenAt,
+        width: item.width,
+        height: item.height,
+        durationSeconds: item.durationSeconds,
+        thumbnailUrl,
+      };
+    })
+  );
+
+  return {
+    items,
+    nextCursor,
+  };
+}
+
+export async function listMediaSharedByMeService({
+  userId,
+  cursor,
+  limit = 20,
+}: {
+  userId: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  const mediaItems = await prisma.media.findMany({
+    where: {
+      ownerId: userId,
+      status: "ready",
+      mediaShares: {
+        some: {},
+      },
+      ...(cursor && {
+        createdAt: { lt: new Date(cursor) },
+      }),
+    },
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      createdAt: true,
+      _count: {
+        select: {
+          mediaShares: true,
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+  });
+
+  let nextCursor: string | null = null;
+
+  if (mediaItems.length > limit) {
+    const nextItem = mediaItems.pop()!;
+    nextCursor = nextItem.createdAt.toISOString();
+  }
+
+  return {
+    items: mediaItems.map((item) => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      createdAt: item.createdAt,
+      shareCount: item._count.mediaShares,
+    })),
+    nextCursor,
+  };
+}
+
+export async function listMyPublicLinksService({
+  userId,
+  cursor,
+  limit = 20,
+}: {
+  userId: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  const shares = await prisma.publicShare.findMany({
+    where: {
+      media: { ownerId: userId },
+      ...(cursor && { createdAt: { lt: new Date(cursor) } }),
+    },
+    select: {
+      id: true,
+      token: true,
+      expiresAt: true,
+      createdAt: true,
+      media: {
+        select: {
+          id: true,
+          type: true,
+          title: true,
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+  });
+
+  let nextCursor: string | null = null;
+
+  if (shares.length > limit) {
+    const nextItem = shares.pop()!;
+    nextCursor = nextItem.createdAt.toISOString();
+  }
+
+  return {
+    items: shares,
+    nextCursor,
+  };
+}
+
+export async function listMediaSharesService({
+  userId,
+  mediaId,
+}: {
+  userId: string;
+  mediaId: string;
+}) {
+  const shares = await prisma.mediaShare.findMany({
+    where: {
+      mediaId,
+      media: {
+        ownerId: userId, // requester owns the media
+      },
+    },
+    select: {
+      createdAt: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          avatarUrl: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return shares.map((share) => ({
+    userId: share.user.id,
+    email: share.user.email,
+    avatarUrl: share.user.avatarUrl,
+    sharedAt: share.createdAt,
+  }));
 }

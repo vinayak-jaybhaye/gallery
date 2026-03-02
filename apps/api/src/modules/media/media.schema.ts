@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const listMediaSchema = {
   query: z.object({
-    cursor: z.string().datetime().optional(),
+    cursor: z.iso.datetime().optional(),
 
     limit: z
       .string()
@@ -14,19 +14,19 @@ export const listMediaSchema = {
       .optional(),
 
     type: z.enum(["image", "video"]).optional(),
-    albumId: z.string().uuid().optional()
+    albumId: z.uuid().optional()
   })
 };
 
 export const mediaByIdParamSchema = {
   params: z.object({
-    id: z.string().uuid()
+    id: z.uuid()
   })
 };
 
 export const updateMediaSchema = {
   params: z.object({
-    id: z.string().uuid()
+    id: z.uuid()
   }),
 
   body: z.object({
@@ -44,7 +44,7 @@ export const updateMediaSchema = {
 export const deleteMediaSchema = {
   body: z.object({
     mediaIds: z
-      .array(z.string().uuid())
+      .array(z.uuid())
       .min(1)
       .max(100)
       .refine(
@@ -58,7 +58,7 @@ export const recoverMediaSchema = deleteMediaSchema;
 
 export const listDeletedMediaSchema = {
   query: z.object({
-    cursor: z.string().uuid().optional(),
+    cursor: z.iso.datetime().optional(),
     limit: z
       .coerce.number()
       .int()

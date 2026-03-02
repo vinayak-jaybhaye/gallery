@@ -6,6 +6,7 @@ import authRoutes from "@/modules/auth/auth.routes";
 import uploadsRoutes from "@/modules/uploads/uploads.routes";
 import mediaRoutes from "@/modules/media/media.routes";
 import userRoutes from "@/modules/user/user.routes";
+import albumsRoutes from "@/modules/albums/albums.routes";
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use("/auth", authRoutes);
 app.use("/uploads", authMiddleware, uploadsRoutes);
 app.use("/media", authMiddleware, mediaRoutes);
 app.use("/user", authMiddleware, userRoutes);
+app.use("/albums", authMiddleware, albumsRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

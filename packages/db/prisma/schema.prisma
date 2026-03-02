@@ -18,7 +18,10 @@ model User {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  media Media[]
+  media       Media[]
+  albums      Album[]
+  albumShares AlbumShare[]
+  mediaShares MediaShare[]
 }
 
 model Media {
@@ -42,6 +45,10 @@ model Media {
 
   owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   uploadSession UploadSession?
+  albumMedias   AlbumMedia[]
+  mediaShares   MediaShare[]
+  publicShares  PublicShare[]
+  albums        Album[]
 
   @@index([ownerId, status, createdAt(sort: Desc)])
 }
@@ -60,6 +67,72 @@ model UploadSession {
   @@index([expiresAt])
 }
 
+model Album {
+  id           String   @id @default(uuid())
+  ownerId      String
+  title        String
+  coverMediaId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner      User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  coverMedia Media? @relation(fields: [coverMediaId], references: [id], onDelete: SetNull)
+
+  media  AlbumMedia[]
+  shares AlbumShare[]
+
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+model AlbumMedia {
+  albumId String
+  mediaId String
+  addedAt DateTime @default(now())
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([albumId, mediaId])
+  @@index([mediaId])
+}
+
+model AlbumShare {
+  id        String    @id @default(uuid())
+  albumId   String
+  userId    String
+  role      AlbumRole @default(viewer)
+  createdAt DateTime  @default(now())
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, userId])
+  @@index([userId])
+}
+
+model MediaShare {
+  id        String   @id @default(uuid())
+  mediaId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, userId])
+  @@index([userId])
+}
+
+model PublicShare {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  mediaId   String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+}
+
 enum MediaType {
   image
   video
@@ -75,4 +148,9 @@ enum MediaStatus {
 enum UploadSource {
   file
   streaming
+}
+
+enum AlbumRole {
+  viewer
+  editor
 }

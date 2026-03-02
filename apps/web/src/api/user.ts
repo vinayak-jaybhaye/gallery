@@ -18,13 +18,11 @@ export async function updatePasswordAuthStatus({
   passwordAuthEnabled,
   password,
 }: {
-  passwordAuthEnabled: boolean;
+  passwordAuthEnabled: boolean
   password?: string;
 }) {
   return api.post("/user/update-password-auth-state", {
-    data: {
-      passwordAuthEnabled,
-      password,
-    },
+    passwordAuthEnabled,
+    password,
   });
 }

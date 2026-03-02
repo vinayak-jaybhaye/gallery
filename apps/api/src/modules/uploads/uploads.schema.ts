@@ -18,14 +18,16 @@ export const startUploadSchema = {
     z.object({
       type: z.literal("image"),
       mimeType: z.enum(allowedImageMimeTypes),
-      sizeBytes: z.number().positive().optional(),
+      sizeBytes: z.number().nonnegative(),
       title: z.string().min(1).max(255),
+      source: z.literal("file")
     }),
     z.object({
       type: z.literal("video"),
       mimeType: z.enum(allowedVideoMimeTypes),
-      sizeBytes: z.number().positive().optional(),
+      sizeBytes: z.number().nonnegative(),
       title: z.string().min(1).max(255),
+      source: z.enum(["file", "streaming"])
     }),
   ]),
 };

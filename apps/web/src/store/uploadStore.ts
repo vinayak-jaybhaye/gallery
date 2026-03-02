@@ -5,12 +5,13 @@ export type UploadItem = {
   mediaId: string;
   title: string;
   type: "image" | "video";
+  source: "file" | "streaming";
   mimeType: string;
   sizeBytes: number;
   expiresAt: string | null;
   createdAt: string;
   uploadedBytes: number;
-  status: "pending" | "uploading" | "failed";
+  status: "pending" | "uploading" | "streaming" | "failed"; // streaming = recording + uploading
 };
 
 export type UploadState = {
@@ -19,6 +20,7 @@ export type UploadState = {
   bootstrapUploads: (uploads: PendingUploadItem[]) => void;
 
   updateProgress: (mediaId: string, uploadedBytes: number) => void;
+  increamentUploadSizeBytes: (mediaId: string, sizeBytes: number) => void;
   setStatus: (mediaId: string, status: UploadItem["status"]) => void;
   removeUpload: (mediaId: string) => void;
   addUpload: (item: UploadItem) => void;
@@ -42,6 +44,23 @@ export const useUploadStore = create<UploadState>((set) => ({
         },
       };
     });
+  },
+
+  increamentUploadSizeBytes: (mediaId, incrementBy) => {
+    set((state) => {
+      const existing = state.uploads[mediaId];
+      if (!existing) return state;
+
+      return {
+        uploads: {
+          ...state.uploads,
+          [mediaId]: {
+            ...existing,
+            sizeBytes: existing.sizeBytes + incrementBy,
+          }
+        }
+      }
+    })
   },
 
   setStatus: (mediaId, status) => {
@@ -70,6 +89,7 @@ export const useUploadStore = create<UploadState>((set) => ({
   },
 
   addUpload: (item) => {
+    console.log("Adding upload:", item);
     set((state) => ({
       uploads: {
         ...state.uploads,

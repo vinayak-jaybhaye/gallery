@@ -1,6 +1,7 @@
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
+import { matchPasswords } from "@/utils/password";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -28,6 +29,64 @@ export async function handleGoogleAuth(idToken: string) {
       avatarUrl: picture,
     },
   });
+
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET environment variable is not set");
+  }
+
+  const token = jwt.sign(
+    { userId: user.id, email: user.email, avatarUrl: user.avatarUrl },
+    jwtSecret,
+    {
+      expiresIn: (process.env.JWT_EXPIRY ?? "1d") as jwt.SignOptions["expiresIn"],
+    }
+  );
+  return { user, accessToken: token };
+}
+
+export async function handleCredentialsLogin(email: string, password: string) {
+  // development user
+  if (process.env.NODE_ENV === "development" && process.env.DEV_USER_EMAIL) {
+    const email = process.env.DEV_USER_EMAIL;
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { email },
+    });
+
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET environment variable is not set");
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, avatarUrl: user.avatarUrl },
+      jwtSecret,
+      {
+        expiresIn: (process.env.JWT_EXPIRY ?? "1d") as jwt.SignOptions["expiresIn"],
+      }
+    );
+    return { user, accessToken: token };
+
+  }
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user) {
+    throw new Error("Invalid credentials");
+  }
+
+  if (user.passwordAuthEnabled === false || !user.passwordHash) {
+    throw new Error("Password authentication is disabled for this user");
+  }
+
+  const isPasswordValid = await matchPasswords(password, user.passwordHash);
+  if (!isPasswordValid) {
+    throw new Error("Invalid credentials");
+  }
 
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {

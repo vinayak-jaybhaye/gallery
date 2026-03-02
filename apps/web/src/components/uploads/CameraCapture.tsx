@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Props = {
   onCapture: (blob: Blob) => void;
   onClose: () => void;
+};
+
+type CameraDevice = {
+  deviceId: string;
+  label: string;
 };
 
 export default function CameraCapture({ onCapture, onClose }: Props) {
@@ -13,96 +18,159 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [cameras, setCameras] = useState<CameraDevice[]>([]);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
 
-  useEffect(() => {
-    let mounted = true;
+  const startCamera = useCallback(async (deviceId?: string) => {
+    // Check if we're in a secure context (required for getUserMedia on mobile)
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setError("Camera requires a secure connection (HTTPS)");
+      setIsLoading(false);
+      return;
+    }
 
-    async function startCamera() {
-      // Check if getUserMedia is supported
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setError("Camera not supported on this browser");
-        setIsLoading(false);
-        return;
+    // Check if getUserMedia is supported - handle various browser implementations
+    const hasGetUserMedia = !!(
+      navigator.mediaDevices?.getUserMedia ||
+      (navigator as any).webkitGetUserMedia ||
+      (navigator as any).mozGetUserMedia ||
+      (navigator as any).msGetUserMedia
+    );
+
+    if (!hasGetUserMedia) {
+      setError("Camera not supported on this browser");
+      setIsLoading(false);
+      return;
+    }
+
+    // Stop existing stream if any
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    try {
+      // Try with ideal constraints first, fallback to basic if needed
+      let stream: MediaStream;
+
+      // Use the standard API or polyfill
+      const getUserMedia = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices)
+        || function (constraints: MediaStreamConstraints) {
+          const legacyGetUserMedia = (navigator as any).webkitGetUserMedia
+            || (navigator as any).mozGetUserMedia
+            || (navigator as any).msGetUserMedia;
+
+          if (!legacyGetUserMedia) {
+            return Promise.reject(new Error('getUserMedia is not supported'));
+          }
+
+          return new Promise<MediaStream>((resolve, reject) => {
+            legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+          });
+        };
+
+      const videoConstraints: MediaTrackConstraints = {
+        width: { ideal: 1920, max: 4096 },
+        height: { ideal: 1080, max: 2160 },
+      };
+
+      // Use specific device if provided, otherwise prefer environment camera
+      if (deviceId) {
+        videoConstraints.deviceId = { exact: deviceId };
+      } else {
+        videoConstraints.facingMode = { ideal: "environment" };
       }
 
       try {
-        // Try with ideal constraints first, fallback to basic if needed
-        let stream: MediaStream;
-
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1920, max: 4096 },
-              height: { ideal: 1080, max: 2160 },
-            },
-            audio: false,
-          });
-        } catch {
-          // Fallback to basic constraints if ideal fails
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" },
-            audio: false,
-          });
-        }
-
-        if (!mounted) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-
-          // Wait for video to be ready
-          await new Promise<void>((resolve, reject) => {
-            const video = videoRef.current!;
-            video.onloadedmetadata = () => {
-              video.play()
-                .then(() => resolve())
-                .catch(reject);
-            };
-            video.onerror = () => reject(new Error("Video failed to load"));
-          });
-        }
-
-        if (mounted) {
-          setIsLoading(false);
-        }
-      } catch (err) {
-        if (!mounted) return;
-
-        console.error("Camera error:", err);
-
-        if (err instanceof Error) {
-          if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-            setError("Camera permission denied. Please allow camera access.");
-          } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-            setError("No camera found on this device.");
-          } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-            setError("Camera is in use by another application.");
-          } else if (err.name === "OverconstrainedError") {
-            setError("Camera doesn't support the requested settings.");
-          } else {
-            setError(`Camera error: ${err.message}`);
-          }
-        } else {
-          setError("Failed to access camera. Please try again.");
-        }
-
-        setIsLoading(false);
+        stream = await getUserMedia({
+          video: videoConstraints,
+          audio: false,
+        });
+      } catch {
+        // Fallback to basic constraints if ideal fails
+        const fallbackConstraints: MediaTrackConstraints = deviceId
+          ? { deviceId: { exact: deviceId } }
+          : { facingMode: "environment" };
+        stream = await getUserMedia({
+          video: fallbackConstraints,
+          audio: false,
+        });
       }
-    }
 
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+
+        // Wait for video to be ready
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!;
+          video.onloadedmetadata = () => {
+            video.play()
+              .then(() => resolve())
+              .catch(reject);
+          };
+          video.onerror = () => reject(new Error("Video failed to load"));
+        });
+      }
+
+      // Enumerate cameras after getting permission
+      if (navigator.mediaDevices?.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices
+          .filter((d) => d.kind === "videoinput")
+          .map((d, idx) => ({
+            deviceId: d.deviceId,
+            label: d.label || `Camera ${idx + 1}`,
+          }));
+        setCameras(videoDevices);
+
+        // Find current camera index
+        if (deviceId) {
+          const idx = videoDevices.findIndex((d) => d.deviceId === deviceId);
+          if (idx !== -1) setCurrentCameraIndex(idx);
+        }
+      }
+
+      setIsLoading(false);
+    } catch (err) {
+      console.error("Camera error:", err);
+
+      if (err instanceof Error) {
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          setError("Camera permission denied. Please allow camera access.");
+        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+          setError("No camera found on this device.");
+        } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+          setError("Camera is in use by another application.");
+        } else if (err.name === "OverconstrainedError") {
+          setError("Camera doesn't support the requested settings.");
+        } else {
+          setError(`Camera error: ${err.message}`);
+        }
+      } else {
+        setError("Failed to access camera. Please try again.");
+      }
+
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     startCamera();
 
     return () => {
-      mounted = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [startCamera]);
+
+  const switchCamera = useCallback(() => {
+    if (cameras.length < 2) return;
+    const nextIndex = (currentCameraIndex + 1) % cameras.length;
+    setCurrentCameraIndex(nextIndex);
+    setIsLoading(true);
+    startCamera(cameras[nextIndex].deviceId);
+  }, [cameras, currentCameraIndex, startCamera]);
 
   async function capture() {
     if (isCapturing) return;
@@ -128,7 +196,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
           if (typeof imageCapture.takePhoto === "function") {
             const blob = await imageCapture.takePhoto();
             onCapture(blob);
-            onClose();
+            setIsCapturing(false);
             return;
           }
         } catch (err) {
@@ -172,7 +240,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
       }
 
       onCapture(blob);
-      onClose();
+      setIsCapturing(false);
     } catch (err) {
       console.error("Capture error:", err);
       setError(err instanceof Error ? err.message : "Failed to capture photo");
@@ -183,11 +251,18 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
   if (error) {
     return (
       <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-50 p-4">
-        <div className="text-white text-center max-w-md">
-          <p className="text-red-400 mb-4">{error}</p>
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <h3 className="text-white text-xl font-semibold mb-2">Camera Unavailable</h3>
+          <p className="text-white/70 mb-8">{error}</p>
           <button
             onClick={onClose}
-            className="bg-white text-black px-6 py-2 rounded-full"
+            className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full font-medium transition-colors"
           >
             Close
           </button>
@@ -197,36 +272,100 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-50">
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-white">Starting camera...</p>
+    <div className="fixed inset-0 bg-black flex flex-col z-50">
+      {/* Top Bar */}
+      <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/60 to-transparent">
+        <div className="flex items-center justify-between p-4 safe-area-inset-top">
+          <button
+            onClick={onClose}
+            className="cursor-pointer p-2 rounded-full hover:bg-white/10 transition-colors"
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <span className="text-white font-medium">Photo</span>
+
+          <div className="w-10" /> {/* Spacer for centering */}
         </div>
-      )}
+      </div>
 
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className={`max-h-[75vh] rounded-lg ${isLoading ? "opacity-0" : "opacity-100"}`}
-      />
+      {/* Camera Viewfinder */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+        {isLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10">
+            <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+            <p className="text-white/70">Starting camera...</p>
+          </div>
+        )}
 
-      <div className="flex gap-6 mt-6">
-        <button
-          onClick={capture}
-          disabled={isLoading || isCapturing}
-          className="bg-white px-6 py-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isCapturing ? "Capturing..." : "Capture"}
-        </button>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover ${isLoading ? "opacity-0" : "opacity-100"} transition-opacity duration-300`}
+        />
 
-        <button
-          onClick={onClose}
-          className="text-white"
-        >
-          Cancel
-        </button>
+        {/* Capture flash effect */}
+        {isCapturing && (
+          <div className="absolute inset-0 bg-white animate-pulse pointer-events-none" />
+        )}
+
+        {/* Grid overlay (optional viewfinder guides) */}
+        {!isLoading && (
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="w-full h-full grid grid-cols-3 grid-rows-3">
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="border border-white/10" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Controls */}
+      <div className="bg-gradient-to-t from-black via-black/80 to-transparent">
+        <div className="flex items-center justify-center gap-8 py-8 px-6 safe-area-inset-bottom">
+          {/* Gallery placeholder / Cancel */}
+          <button
+            onClick={onClose}
+            className="cursor-pointer w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* Shutter Button */}
+          <button
+            onClick={capture}
+            disabled={isLoading || isCapturing}
+            className="cursor-pointer relative w-20 h-20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed group"
+          >
+            {/* Outer ring */}
+            <div className="absolute inset-0 rounded-full border-4 border-white transition-transform group-hover:scale-105 group-active:scale-95" />
+            {/* Inner circle */}
+            <div className={`absolute inset-2 rounded-full bg-white transition-all ${isCapturing ? "scale-75 bg-white/70" : "group-hover:inset-2.5 group-active:inset-3"}`} />
+          </button>
+
+          {/* Switch Camera */}
+          {cameras.length > 1 ? (
+            <button
+              onClick={switchCamera}
+              disabled={isLoading}
+              className="cursor-pointer w-14 h-14 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-50"
+              title={`Switch to ${cameras[(currentCameraIndex + 1) % cameras.length]?.label || "next camera"}`}
+            >
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          ) : (
+            <div className="w-14 h-14" /> // Spacer
+          )}
+        </div>
       </div>
 
       <canvas ref={canvasRef} className="hidden" />

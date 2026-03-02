@@ -25,6 +25,7 @@ export function useUpload() {
         mimeType: file.type,
         sizeBytes: file.size,
         title: file.name,
+        source: "file"
       });
 
       // add to upload store
@@ -37,7 +38,9 @@ export function useUpload() {
         expiresAt: null,
         type: file.type.startsWith("image") ? "image" : "video",
         mimeType: file.type,
+        source: "file",
         createdAt: new Date().toISOString(),
+
       });
 
       //Single Upload

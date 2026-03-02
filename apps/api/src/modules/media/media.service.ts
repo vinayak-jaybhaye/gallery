@@ -31,12 +31,17 @@ async function deleteObjectsBatch(keys: string[]) {
 export async function listMediaService({
   userId,
   lastCreatedAt,
-  limit = 20
+  limit = 20,
+  type,
+  albumId
 }: {
   userId: string;
   lastCreatedAt?: Date;
   limit?: number;
+  type?: "image" | "video";
+  albumId?: string;
 }) {
+  // TODO:: add albums
   const take = Math.min(limit, 100);
 
   const items = await prisma.media.findMany({
@@ -47,7 +52,8 @@ export async function listMediaService({
       },
       ...(lastCreatedAt && {
         createdAt: { lt: lastCreatedAt }
-      })
+      }),
+      ...(type && { type })
     },
     orderBy: [
       { createdAt: "desc" },

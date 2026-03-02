@@ -1,226 +1,203 @@
-import { db } from "@/lib/db/db";
+/// <reference lib="webworker" />
 
-let isUploading = false;
-let recordingFinished = false;
-let activeMediaId: string | null = null;
-let authToken: string | null = null;
+import { db } from "@/lib/db";
 
-const MAX_RETRIES = 5;
+let running = false;
+let mediaId: string;
+let concurrency = 3;
+let activeUploads = 0;
+let uploadedBytes = 0;
+let uploadType: "streaming" | "uploading" = "streaming";
 
-function log(...args: any[]) {
-  console.log("[UploadWorker]", ...args);
-}
+// Pending URL request tracker
+let pendingUrlRequest: {
+  resolve: (urls: Record<number, string>) => void;
+  reject: (err: Error) => void;
+} | null = null;
 
-function error(...args: any[]) {
-  console.error("[UploadWorker]", ...args);
-}
+// In-memory retry tracking (resets on manual resume)
+const partRetries = new Map<number, number>();
+const MAX_PART_RETRIES = 3;
+const MAX_LOOP_RETRIES = 5;
 
-log("Initialized");
+self.onmessage = async (event: MessageEvent) => {
+  const data = event.data;
 
-self.onmessage = async (event) => {
-  log("Message received:", event.data);
+  switch (data.type) {
+    case "START_UPLOAD":
+      mediaId = data.mediaId;
+      running = true;
+      uploadType = data.uploadType;
+      uploadedBytes = data.uploadedBytes;
+      partRetries.clear(); // Reset retries on start/resume
+      processLoop();
+      break;
 
-  if (event.data.type === "SET_AUTH") {
-    authToken = event.data.token;
-    log("Auth token set:", !!authToken);
-    return;
-  }
+    case "RECORDING_FINISHED":
+      uploadType = "uploading";
+      break;
 
-  if (event.data.type === "START_UPLOAD") {
-    activeMediaId = event.data.mediaId;
-    log("START_UPLOAD for mediaId:", activeMediaId);
+    case "STOP_UPLOAD":
+      running = false;
+      break;
 
-    if (!isUploading) {
-      log("Starting upload loop");
-      isUploading = true;
-      await processQueue(activeMediaId);
-      isUploading = false;
-      log("Upload loop finished");
-    } else {
-      log("Already uploading — ignoring START_UPLOAD");
-    }
-  }
-
-  if (event.data.type === "RECORDING_FINISHED") {
-    recordingFinished = true;
-    log("RECORDING_FINISHED for mediaId:", activeMediaId);
-    await tryComplete();
+    case "SIGNED_URLS_RESPONSE":
+      if (pendingUrlRequest) {
+        pendingUrlRequest.resolve(data.urls);
+        pendingUrlRequest = null;
+      }
+      break;
   }
 };
 
-async function processQueue(mediaId: string) {
-  log("Checking pending parts for mediaId:", mediaId);
+// Request signed URLs from main thread and wait for response
+function requestSignedUrls(partNumbers: number[]): Promise<Record<number, string>> {
+  return new Promise((resolve, reject) => {
+    pendingUrlRequest = { resolve, reject };
+    self.postMessage({
+      type: "REQUEST_SIGNED_URLS",
+      partNumbers,
+    });
+  });
+}
 
-  const pendingParts = await db.parts
-    .where({ mediaId })
-    .and(part => !part.uploaded)
-    .sortBy("partNumber");
+async function processLoop() {
+  console.log("[Worker] processLoop started, mediaId:", mediaId);
 
-  log("Pending parts:", pendingParts.map(p => p.partNumber));
+  let loopRetries = 0;
 
-  if (pendingParts.length === 0) {
-    log("No pending parts left");
-    await tryComplete();
-    return;
-  }
+  while (running) {
+    try {
+      // Get only the parts we need (limited to concurrency)
+      const batch = await db.parts
+        .where("mediaId")
+        .equals(mediaId)
+        .limit(concurrency)
+        .sortBy("partNumber");
 
-  const currentPart = pendingParts[0];
+      if (batch.length === 0) {
+        // If recording is finished, complete upload
+        if (uploadType === "uploading") {
+          self.postMessage({ type: "UPLOAD_COMPLETE" });
+          running = false;
+          return;
+        }
 
-  log(
-    `Processing part ${currentPart.partNumber} (retries=${currentPart.retries})`
-  );
+        // Else wait for next parts to arrive in IndexedDB
+        await sleep(2000);
+        continue;
+      }
 
-  try {
-    await uploadSinglePart(currentPart);
-    log(`Part ${currentPart.partNumber} uploaded successfully`);
-    await processQueue(mediaId);
-  } catch (err) {
-    error(
-      `Part ${currentPart.partNumber} failed permanently:`,
-      err
-    );
+      const partNumbers = batch.map((p) => p.partNumber);
+
+      // Get signed URLs
+      const urls = await requestSignedUrls(partNumbers);
+
+      // Upload batch
+      await uploadBatch(batch, urls);
+
+      // Reset loop retries on success
+      loopRetries = 0;
+    } catch (err) {
+      loopRetries++;
+
+      if (loopRetries >= MAX_LOOP_RETRIES) {
+        self.postMessage({
+          type: "UPLOAD_ERROR",
+          error: `Max retries exceeded: ${String(err)}`,
+        });
+        running = false;
+        return;
+      }
+
+      await sleep(2000);
+    }
   }
 }
 
-async function uploadSinglePart(part: any) {
+async function uploadBatch(
+  parts: any[],
+  urls: Record<number, string>
+) {
+  // Filter out parts that exceeded max retries
+  const uploadableParts = parts.filter((part) => {
+    const retries = partRetries.get(part.partNumber) ?? 0;
+    return retries < MAX_PART_RETRIES;
+  });
+
+  if (uploadableParts.length === 0) {
+    // All parts in batch exceeded retries - notify main thread
+    self.postMessage({
+      type: "UPLOAD_ERROR",
+      error: "Max retries exceeded. Resume manually to retry.",
+    });
+    running = false;
+    return;
+  }
+
+  await Promise.all(
+    uploadableParts.map((part) => uploadPart(part, urls[part.partNumber]))
+  );
+}
+
+async function uploadPart(part: any, url: string) {
+  if (!url) {
+    return;
+  }
+
+  let lastReportedBytes = 0;
+
   try {
-    if (!authToken) {
-      throw new Error("Auth token missing in worker");
-    }
+    activeUploads++;
 
-    log(`Requesting signed URL for part ${part.partNumber}`);
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
 
-    const res = await fetch(
-      `${import.meta.env.VITE_API_URL}/uploads/${part.mediaId}/part-urls`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          partNumbers: [part.partNumber]
-        })
-      }
-    );
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          // Calculate delta since last update
+          const delta = e.loaded - lastReportedBytes;
+          if (delta > 0) {
+            uploadedBytes += delta;
+            lastReportedBytes = e.loaded;
 
-    log("Signed URL response status:", res.status);
+            self.postMessage({
+              type: "PROGRESS_UPDATE",
+              uploadedBytes,
+            });
+          }
+        }
+      };
 
-    if (!res.ok) {
-      throw new Error("Failed to get signed URL");
-    }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status}`));
+        }
+      };
 
-    const data = await res.json();
-    log("Signed URL response body:", data);
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.ontimeout = () => reject(new Error("Upload timeout"));
 
-    const signedUrl = data.urls[0].url;
-
-    log(`Uploading part ${part.partNumber} to S3`);
-
-    const uploadRes = await fetch(signedUrl, {
-      method: "PUT",
-      body: part.blob
+      xhr.open("PUT", url);
+      xhr.send(part.blob);
     });
 
-    log(
-      `S3 upload response for part ${part.partNumber}:`,
-      uploadRes.status
-    );
-
-    if (!uploadRes.ok) {
-      throw new Error("S3 upload failed");
-    }
-
-    const etag = uploadRes.headers.get("ETag");
-    log(`Received ETag for part ${part.partNumber}:`, etag);
-
-    await db.parts.update(part.id!, {
-      uploaded: true,
-      etag
-    });
-
-    log(`DB updated for part ${part.partNumber}`);
-
+    // Delete uploaded part from IndexedDB
+    await db.parts.delete(part.id);
   } catch (err) {
-    const newRetries = part.retries + 1;
+    // Rollback progress on failure
+    uploadedBytes -= lastReportedBytes;
 
-    log(
-      `Upload failed for part ${part.partNumber}. Retry ${newRetries}/${MAX_RETRIES}`
-    );
-
-    if (newRetries > MAX_RETRIES) {
-      error(
-        `Max retries exceeded for part ${part.partNumber}`
-      );
-      throw new Error("Max retries exceeded");
-    }
-
-    await db.parts.update(part.id!, {
-      retries: newRetries
-    });
-
-    const delay = Math.pow(2, newRetries) * 1000;
-
-    log(
-      `Waiting ${delay}ms before retrying part ${part.partNumber}`
-    );
-
-    await sleep(delay);
-
-    await uploadSinglePart({
-      ...part,
-      retries: newRetries
-    });
+    // Track retries in memory
+    const currentRetries = partRetries.get(part.partNumber) ?? 0;
+    partRetries.set(part.partNumber, currentRetries + 1);
+  } finally {
+    activeUploads--;
   }
 }
 
 function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function tryComplete() {
-  log("Checking if upload can complete...");
-
-  if (!recordingFinished) {
-    log("Cannot complete — recording not finished");
-    return;
-  }
-
-  if (!activeMediaId) {
-    log("Cannot complete — no activeMediaId");
-    return;
-  }
-
-  const remaining = await db.parts
-    .where({ mediaId: activeMediaId })
-    .and(part => !part.uploaded)
-    .count();
-
-  log("Remaining unuploaded parts:", remaining);
-
-  if (remaining > 0) {
-    log("Cannot complete — parts still pending");
-    return;
-  }
-
-  log("All parts uploaded. Preparing completion request");
-
-  const res = await fetch(
-    `${import.meta.env.VITE_API_URL}/uploads/${activeMediaId}/complete`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-    }
-  );
-
-  log("Complete response status:", res.status);
-
-  if (!res.ok) {
-    throw new Error("Failed to complete upload");
-  }
-
-  log("Upload completed successfully 🎉");
+  return new Promise((r) => setTimeout(r, ms));
 }

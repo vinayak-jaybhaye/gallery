@@ -146,32 +146,57 @@ async function uploadSinglePart(partNumber: number) {
   const etag = await uploadBlob(url, blob);
 
   uploadedPartsSet.add(partNumber);
-  uploadedBytes += blob.size;
-
-  self.postMessage({
-    type: "PROGRESS",
-    uploadedBytes,
-    totalBytes: fileRef.size,
-  });
 
   return etag;
 }
 
 async function uploadBlob(url: string, blob: Blob): Promise<string> {
-  const response = await fetch(url, {
-    method: "PUT",
-    body: blob,
+  let lastReportedBytes = 0;
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const delta = e.loaded - lastReportedBytes;
+        if (delta > 0) {
+          uploadedBytes += delta;
+          lastReportedBytes = e.loaded;
+
+          self.postMessage({
+            type: "PROGRESS",
+            uploadedBytes,
+          });
+        }
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const etag = xhr.getResponseHeader("ETag");
+        if (!etag) {
+          reject(new Error("Missing ETag in S3 response"));
+          return;
+        }
+        resolve(etag.replaceAll('"', ""));
+      } else {
+        // Rollback progress on failure
+        uploadedBytes -= lastReportedBytes;
+        reject(new Error(`Part upload failed with status ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => {
+      uploadedBytes -= lastReportedBytes;
+      reject(new Error("Network error"));
+    };
+
+    xhr.ontimeout = () => {
+      uploadedBytes -= lastReportedBytes;
+      reject(new Error("Upload timeout"));
+    };
+
+    xhr.open("PUT", url);
+    xhr.send(blob);
   });
-
-  if (!response.ok) {
-    throw new Error(`Part upload failed with status ${response.status}`);
-  }
-
-  const etag = response.headers.get("ETag");
-
-  if (!etag) {
-    throw new Error("Missing ETag in S3 response");
-  }
-
-  return etag.replaceAll('"', "");
 }

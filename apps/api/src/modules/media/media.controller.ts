@@ -16,15 +16,19 @@ export async function listMedia(
 ) {
   const userId = req.user!.id;
 
-  const { cursor, limit } = req.query as {
+  const { cursor, limit, type, albumId } = req.query as {
     cursor?: string;
     limit?: number;
+    type?: "image" | "video";
+    albumId?: string;
   };
 
   const result = await listMediaService({
     userId,
     lastCreatedAt: cursor ? new Date(cursor) : undefined,
-    limit
+    limit,
+    type,
+    albumId
   });
 
   res.json(result);

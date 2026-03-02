@@ -11,7 +11,10 @@ export const listMediaSchema = {
       .refine((val) => val > 0 && val <= 100, {
         message: "Limit must be between 1 and 100"
       })
-      .optional()
+      .optional(),
+
+    type: z.enum(["image", "video"]).optional(),
+    albumId: z.string().uuid().optional()
   })
 };
 

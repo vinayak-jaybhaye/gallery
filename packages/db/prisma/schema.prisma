@@ -47,12 +47,13 @@ model Media {
 }
 
 model UploadSession {
-  id         String   @id @default(uuid())
-  mediaId    String   @unique
-  s3UploadId String   @unique
+  id         String       @id @default(uuid())
+  mediaId    String       @unique
+  s3UploadId String       @unique
+  source     UploadSource @default(file)
   expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
   media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
@@ -69,4 +70,9 @@ enum MediaStatus {
   processing
   ready
   deleted
+}
+
+enum UploadSource {
+  file
+  streaming
 }

@@ -43,11 +43,17 @@ export type TrashItem = {
   thumbnailUrl: string;
 };
 
-export async function listMedia(cursor?: string) {
+export type MediaType = "image" | "video";
+
+export async function listMedia(cursor?: string, mediaType?: MediaType, albumId?: string) {
+  // TODO:: add albums
+  // Ignore album Id for now
+  console.log("Media fetching", { cursor, mediaType, albumId });
   const res = await api.get<ListMediaResponse>("/media", {
     params: {
       cursor,
-      limit: 20
+      limit: 20,
+      ...(mediaType && { type: mediaType }),
     }
   });
   return res.data;

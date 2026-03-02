@@ -1,6 +1,6 @@
 import { api } from "@/lib/axios";
 
-type GoogleLoginResponse = {
+type LoginResponse = {
   accessToken: string;
   user: {
     id: string;
@@ -10,8 +10,16 @@ type GoogleLoginResponse = {
 };
 
 export async function loginWithGoogle(idToken: string) {
-  const { data } = await api.post<GoogleLoginResponse>("/auth/google", {
+  const { data } = await api.post<LoginResponse>("/auth/google", {
     idToken,
+  });
+  return data;
+}
+
+export async function loginWithEmailPassword(email: string, password: string) {
+  const { data } = await api.post<LoginResponse>("/auth/credentials-login", {
+    email,
+    password,
   });
   return data;
 }

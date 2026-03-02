@@ -19,6 +19,7 @@ export async function handleSingleUpload(
       expiresAt: null,
       type: file.type.startsWith("image") ? "image" : "video",
       mimeType: file.type,
+      source: "file",
       createdAt: new Date().toISOString(),
     });
   } else {

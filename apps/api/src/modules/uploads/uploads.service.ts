@@ -23,13 +23,15 @@ export async function startUploadService({
   type,
   mimeType,
   sizeBytes,
-  title
+  title,
+  source
 }: {
   userId: string;
   type: "image" | "video";
   mimeType: string;
-  sizeBytes?: number;
+  sizeBytes: number; // 0 if source is streaming
   title: string;
+  source: "file" | "streaming";
 }) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -38,10 +40,8 @@ export async function startUploadService({
   if (!user) throw new AppError("User not found", 404);
 
   // Early quota check only if size is known
-  if (sizeBytes !== undefined) {
-    if (user.storageUsedBytes + BigInt(sizeBytes) > user.storageQuotaBytes) {
-      throw new AppError("Storage quota exceeded", 400);
-    }
+  if (user.storageUsedBytes + BigInt(sizeBytes) > user.storageQuotaBytes) {
+    throw new AppError("Storage quota exceeded", 400);
   }
 
   const mediaId = randomUUID();
@@ -61,8 +61,7 @@ export async function startUploadService({
   });
 
   // If size unknown  force multipart
-  const shouldUseMultipart =
-    sizeBytes === undefined || sizeBytes > MULTIPART_THRESHOLD;
+  const shouldUseMultipart = sizeBytes > MULTIPART_THRESHOLD || source === "streaming";
 
   if (!shouldUseMultipart) {
     // SINGLE UPLOAD
@@ -101,6 +100,7 @@ export async function startUploadService({
       mediaId,
       s3UploadId: multipart.UploadId,
       expiresAt: new Date(Date.now() + UPLOAD_SESSION_EXPIRY),
+      source,
     },
   });
 
@@ -377,6 +377,7 @@ export async function listUploadSessionsService({
     mediaId: session.mediaId,
     title: session.media.title,
     type: session.media.type,
+    source: session.source,
     mimeType: session.media.mimeType,
     sizeBytes: session.media.sizeBytes,
     expiresAt: session.expiresAt,

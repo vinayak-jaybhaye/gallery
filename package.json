@@ -3,16 +3,19 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev:api": "pnpm --filter gallery-api dev",
+    "dev:api": "dotenv -e .env -- pnpm --filter gallery-api dev",
     "dev:web": "pnpm --filter gallery-web dev",
-    "dev:worker": "pnpm --filter media-worker dev",
+    "dev:worker": "dotenv -e .env -- pnpm --filter media-worker dev",
     "build": "pnpm -r build",
-    "db:generate": "pnpm --filter @gallery/db db:generate",
-    "db:migrate": "pnpm --filter @gallery/db db:migrate",
-    "db:push": "pnpm --filter @gallery/db db:push",
-    "db:studio": "pnpm --filter @gallery/db db:studio",
+    "db:generate": "dotenv -e .env -- pnpm --filter @gallery/db db:generate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @gallery/db db:migrate",
+    "db:push": "dotenv -e .env -- pnpm --filter @gallery/db db:push",
+    "db:studio": "dotenv -e .env -- pnpm --filter @gallery/db db:studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },
-  "packageManager": "pnpm@10.29.2"
+  "packageManager": "pnpm@10.29.2",
+  "devDependencies": {
+    "dotenv-cli": "^11.0.0"
+  }
 }

@@ -16,6 +16,15 @@ export type GetPartUrlsResponse = {
   urls: PartUrl[];
 };
 
+export type GetUploadedStatusResponse = {
+  partSize: number;
+  uploadedParts: {
+    partNumber: number;
+    sizeBytes: number;
+    etag: string
+  }[]
+}
+
 export type CompleteUploadPayload = {
   parts: {
     partNumber: number;
@@ -27,11 +36,28 @@ export type PendingUploadItem = {
   mediaId: string;
   title: string;
   type: "image" | "video";
+  source: "file" | "streaming";
   mimeType: string;
   sizeBytes: number;
   expiresAt: string;
   createdAt: string;
 };
+
+type StartUploadInput =
+  | {
+    type: "image";
+    mimeType: string;
+    sizeBytes: number;
+    title: string;
+    source: "file";
+  }
+  | {
+    type: "video";
+    mimeType: string;
+    sizeBytes: number;
+    title: string;
+    source: "file" | "streaming";
+  };
 
 export type PendingUploadsResponse = PendingUploadItem[];
 
@@ -40,15 +66,14 @@ export async function getPendingUploads() {
   return res.data;
 }
 
-export async function startUpload(data: {
-  type: "image" | "video";
-  mimeType: string;
-  sizeBytes?: number;
-  title: string;
-}) {
-  const res = await api.post<StartUploadResponse>("/uploads", data);
-  console.log("startUpload response:", res.data);
-  return res.data;
+export async function startUpload(data: StartUploadInput) {
+  console.log("startUpload data:", data);
+  try {
+    const res = await api.post<StartUploadResponse>("/uploads", data);
+    return res.data;
+  } catch (err) {
+    throw err;
+  }
 }
 
 export async function getPartUploadUrls(
@@ -84,6 +109,6 @@ export async function abortUpload(mediaId: string) {
 }
 
 export async function getUploadStatus(mediaId: string) {
-  const res = await api.get(`/uploads/${mediaId}/status`);
+  const res = await api.get<GetUploadedStatusResponse>(`/uploads/${mediaId}/status`);
   return res.data;
 }

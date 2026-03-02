@@ -1,14 +1,12 @@
-import Dexie from "dexie";
-import type { Table } from "dexie";
+import Dexie, { type Table } from "dexie";
 
 export interface Part {
   id?: number;
+  userId: string;
   mediaId: string;
   partNumber: number;
   blob: Blob;
-  uploaded: boolean;
-  etag?: string;
-  retries: 0
+  createdAt: number;
 }
 
 class VideoDB extends Dexie {
@@ -16,8 +14,14 @@ class VideoDB extends Dexie {
 
   constructor() {
     super("VideoUploader");
-    this.version(1).stores({
-      parts: "++id, mediaId, partNumber, uploaded, retries",
+
+    this.version(2).stores({
+      parts: `
+        ++id,
+        mediaId,
+        createdAt,
+        [mediaId+partNumber]
+      `,
     });
   }
 }

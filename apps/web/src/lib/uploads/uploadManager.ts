@@ -43,18 +43,15 @@ class UploadManager {
 
     switch (data.type) {
       case "PROGRESS":
-        console.log("Progress update for mediaId:", mediaId, "uploadedBytes:", data.uploadedBytes);
         store.updateProgress(mediaId, data.uploadedBytes);
         break;
 
       case "UPLOAD_COMPLETE":
         try {
           await completeUpload(mediaId);
-
           // Remove from store
           store.removeUpload(mediaId);
         } catch (err) {
-          console.error("Complete upload failed:", err);
           store.setStatus(mediaId, "failed");
         } finally {
           this.cleanup(mediaId);
@@ -62,8 +59,6 @@ class UploadManager {
         break;
 
       case "UPLOAD_ERROR":
-        console.error("Upload error:", data.error);
-
         store.setStatus(mediaId, "failed");
         this.cleanup(mediaId);
         break;
@@ -86,7 +81,6 @@ class UploadManager {
         mediaId,
         partNumbers
       );
-      console.log("mediaId:", mediaId, "urls:", urls);
 
       const worker = this.activeUploads.get(mediaId);
 
@@ -95,8 +89,6 @@ class UploadManager {
         urls,
       });
     } catch (err) {
-      console.error("Failed to get signed URLs:", err);
-
       useUploadStore
         .getState()
         .setStatus(mediaId, "failed");

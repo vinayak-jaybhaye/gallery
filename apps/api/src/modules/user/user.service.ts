@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/middlewares/error.middleware";
-import bcrypt from "bcrypt";
+import { encryptPassword } from "@/utils/password";
 
 export async function updatePasswordAuthStateService({
   userId,
@@ -27,7 +27,7 @@ export async function updatePasswordAuthStateService({
     throw new AppError("Password must be at least 8 characters long", 400);
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await encryptPassword(password);
 
   await prisma.user.update({
     where: { id: userId },

@@ -1,31 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "@/middlewares/error.middleware";
-import { prisma } from "@/lib/prisma";
 
 export async function authMiddleware(
   req: Request,
   _res: Response,
   next: NextFunction
 ) {
-  // development shortcut
-  if (process.env.NODE_ENV === "development") {
-    const email = process.env.DEV_USER_EMAIL || "dev@gallery.local";
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {},
-      create: { email },
-    });
-
-    req.user = {
-      id: user.id,
-      email: user.email,
-    };
-
-    return next();
-  }
-
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {

@@ -76,96 +76,96 @@ body {
   }
 
   .light {
-    /* Base / Light theme values */
+    /* Base / Light theme values - Google Photos style */
     --bg-app: #ffffff;
-    --bg-subtle: #f8fafc;
-    --bg-muted: #f1f5f9;
+    --bg-subtle: #f8f9fa;
+    --bg-muted: #f1f3f4;
 
     /* Surfaces */
-    --surface-default: #ffffff;
+    --surface-default: #fafafa;
     --surface-raised: #ffffff;
-    --surface-selected: #e2e8f0;
+    --surface-selected: #e8eaed;
 
     /* Text */
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
-    --text-inverse: #ffffff;
+    --text-primary: #202124;
+    --text-secondary: #5f6368;
+    --text-muted: #9aa0a6;
+    --text-inverse: #fafafa;
 
     /* Accent */
-    --accent-primary: #2563eb;
-    --accent-soft: #dbeafe;
-    --accent-strong: #1d4ed8;
+    --accent-primary: #1a73e8;
+    --accent-soft: rgba(26, 115, 232, 0.12);
+    --accent-strong: #1557b0;
 
     /* Borders */
-    --border-subtle: #e2e8f0;
-    --border-strong: #2563eb;
+    --border-subtle: #e0e0e0;
+    --border-strong: #1967d2;
 
     /* Status */
-    --success: #16a34a;
-    --warning: #d97706;
-    --error: #dc2626;
-    --info: #0284c7;
+    --success: #1e8e3e;
+    --warning: #f9ab00;
+    --error: #c5221f;
+    --info: #4285f4;
 
     /* Overlay and Disabled */
-    --overlay: rgba(0, 0, 0, 0.5);
-    --disabled: #e5e7eb;
+    --overlay: rgba(0, 0, 0, 0.4);
+    --disabled: #bdc1c6;
 
     /* Destructive */
-    --bg-destructive: #ef4444;
+    --bg-destructive: #d93025;
     --text-destructive-foreground: #ffffff;
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.1);
+    --shadow-md: 0 1px 3px rgba(60, 64, 67, 0.15), 0 1px 2px rgba(60, 64, 67, 0.1);
+    --shadow-lg: 0 4px 8px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.1);
   }
+}
 
-  .dark {
-    /* Background */
-    --bg-app: #020517;
-    /* near-black blue */
-    --bg-subtle: #020617;
-    --bg-muted: #1e293b;
+.dark {
+  /* Background */
+  --bg-app: #0d0d0d;
+  /* Very dark, like Google Photos */
+  --bg-subtle: #141414;
+  --bg-muted: #282828;
 
-    /* Surfaces */
-    --surface-default: #020617;
-    --surface-raised: #020617;
-    --surface-selected: #020617;
+  /* Surfaces */
+  --surface-default: #0d0d0d;
+  --surface-raised: #1a1a1a;
+  --surface-selected: #333333;
 
-    /* Text */
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5f5;
-    --text-muted: #cbd5f5;
-    --text-inverse: #020617;
+  /* Text */
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-muted: #5f6368;
+  --text-inverse: #0d0d0d;
 
-    /* Accent */
-    --accent-primary: #6366f1;
-    /* indigo */
-    --accent-soft: #e0e7ff;
-    --accent-strong: #4f46e5;
+  /* Accent */
+  --accent-primary: #8ab4f8;
+  /* Google blue for dark mode */
+  --accent-soft: rgba(138, 180, 248, 0.15);
+  --accent-strong: #4285f4;
 
-    /* Borders */
-    --border-subtle: #1e293b;
-    --border-strong: #6366f1;
+  /* Borders */
+  --border-subtle: #2d2d2d;
+  --border-strong: #8ab4f8;
 
-    /* Status */
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --error: #ef4444;
-    --info: #38bdf8;
+  /* Status */
+  --success: #81c995;
+  --warning: #fdd663;
+  --error: #f28b82;
+  --info: #8ab4f8;
 
-    /* Overlay & Disabled */
-    --overlay: rgba(0, 0, 0, 0.7);
-    --disabled: #334155;
+  /* Overlay & Disabled */
+  --overlay: rgba(0, 0, 0, 0.7);
+  --disabled: #5f6368;
 
-    /* Destructive */
-    --bg-destructive: #7f1d1d;
-    --text-destructive-foreground: #fef2f2;
+  /* Destructive */
+  --bg-destructive: #c5221f;
+  --text-destructive-foreground: #ffffff;
 
-    /* Shadows (very subtle in dark mode) */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.7);
-    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.8);
-  }
+  /* Shadows (very subtle in dark mode) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 }

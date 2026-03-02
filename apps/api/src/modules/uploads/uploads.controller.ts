@@ -11,7 +11,11 @@ import {
 export async function startUpload(req: Request, res: Response) {
   const result = await startUploadService({
     userId: req.user!.id,
-    ...req.body,
+    type: req.body.type,
+    mimeType: req.body.mimeType,
+    sizeBytes: req.body.sizeBytes,
+    title: req.body.title,
+    source: req.body.source
   });
 
   res.json(result);

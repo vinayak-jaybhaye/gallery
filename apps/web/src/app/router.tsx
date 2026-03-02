@@ -1,55 +1,69 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import {
   Login,
   Gallery,
   MediaViewer,
-  Trash
+  Trash,
+  Albums
 } from "@/pages";
 import Uploads from "@/pages/Uploads";
 import AccountAndSettings from "@/pages/AccountAndSettings";
+import NotFound from "@/pages/NotFound";
+import { AppLayout } from "@/components/layout";
+
+// Reusable route config for media pages
+const mediaRouteChildren = [
+  {
+    path: ":mediaId",
+    element: <MediaViewer />
+  }
+];
+
+// Media routes that share the same Gallery component
+const mediaRoutes = ["/gallery", "/images", "/videos", "/favorites"].map((path) => ({
+  path,
+  element: <Gallery />,
+  children: mediaRouteChildren
+}));
 
 export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Navigate to="/gallery" replace />
+  },
   {
     path: "/login",
     element: <Login />
   },
   {
-    path: "/gallery",
     element: (
       <ProtectedRoute>
-        <Gallery />
+        <AppLayout />
       </ProtectedRoute>
     ),
     children: [
+      ...mediaRoutes,
       {
-        path: ":mediaId",
-        element: <MediaViewer />
+        path: "/uploads",
+        element: <Uploads />
+      },
+      {
+        path: "/accountandsettings",
+        element: <AccountAndSettings />
+      },
+      {
+        path: "/trash",
+        element: <Trash />
+      },
+      {
+        path: "/albums",
+        element: <Albums />
       }
     ]
   },
   {
-    path: "/uploads",
-    element: (
-      <ProtectedRoute>
-        <Uploads />
-      </ProtectedRoute>
-    )
-  },
-  {
-    path: "/accountandsettings",
-    element: (
-      <ProtectedRoute>
-        <AccountAndSettings />
-      </ProtectedRoute>
-    )
-  },
-  {
-    path: "/trash",
-    element: (
-      <ProtectedRoute>
-        <Trash />
-      </ProtectedRoute>
-    )
+    path: "*",
+    element: <ProtectedRoute><NotFound /></ProtectedRoute>
   }
 ]);

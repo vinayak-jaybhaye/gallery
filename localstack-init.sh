@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[localstack-init] starting S3 bootstrap"
+
+if command -v awslocal >/dev/null 2>&1; then
+  AWS_CMD=(awslocal)
+elif command -v localstack >/dev/null 2>&1; then
+  AWS_CMD=(localstack aws)
+elif command -v aws >/dev/null 2>&1; then
+  AWS_CMD=(aws --endpoint-url=http://localhost:4566)
+else
+  echo "[localstack-init] ERROR: no AWS CLI found (awslocal/localstack/aws)" >&2
+  exit 1
+fi
+
+CORS='{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET","PUT","POST","DELETE","HEAD"],
+      "AllowedOrigins": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}'
+
+"${AWS_CMD[@]}" s3api create-bucket \
+  --bucket gallery-bucket \
+  --region us-east-1 >/dev/null 2>&1 || true
+
+"${AWS_CMD[@]}" s3api put-bucket-cors \
+  --bucket gallery-bucket \
+  --cors-configuration "$CORS"
+
+echo "[localstack-init] completed S3 bootstrap"

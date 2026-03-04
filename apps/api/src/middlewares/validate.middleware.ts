@@ -18,7 +18,15 @@ export const validate =
 
         if (schema.query) {
           const parsed = schema.query.parse(req.query);
-          Object.assign(req.query, parsed);
+          // Express implements `req.query` as a getter that re-parses the URL each time.
+          // Mutating the returned object won't persist for later middleware/handlers.
+          // so override request.query
+          Object.defineProperty(req, "query", {
+            value: parsed,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
         }
 
         if (schema.params) {

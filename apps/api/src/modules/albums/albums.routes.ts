@@ -2,55 +2,58 @@ import { Router } from "express";
 import { validate } from "@/middlewares/validate.middleware";
 import { asyncHandler } from "@/utils/asyncHandler";
 import {
-  createAlbumSchema,
-  listAlbumsSchema,
-  albumByIdParamSchema,
-  updateAlbumSchema,
-  addMediaToAlbumSchema,
-  removeMediaFromAlbumSchema,
-  shareAlbumSchema,
-  updateAlbumShareSchema,
-  removeAlbumShareSchema,
+  createAlbumRequestSchema,
+  listAlbumsQuerySchema,
+  albumIdParamsSchema,
+  updateAlbumRequestSchema,
+  addAlbumMediaRequestSchema,
+  removeAlbumMediaRequestSchema,
+  listAlbumSharesRequestSchema,
+  createAlbumShareRequestSchema,
+  updateAlbumShareRequestSchema,
+  removeAlbumShareRequestSchema,
+  leaveAlbumRequestSchema,
 } from "./albums.schema";
 import {
-  createAlbum,
-  listAlbums,
-  getAlbumById,
-  updateAlbum,
-  deleteAlbum,
-  addMediaToAlbum,
-  removeMediaFromAlbum,
-  shareAlbum,
-  updateAlbumShare,
-  removeAlbumShare,
+  createAlbumHandler,
+  listAlbumsHandler,
+  getAlbumByIdHandler,
+  updateAlbumHandler,
+  deleteAlbumHandler,
+  addMediaToAlbumHandler,
+  removeMediaFromAlbumHandler,
+  listAlbumSharesHandler,
+  shareAlbumHandler,
+  updateAlbumShareHandler,
+  removeAlbumShareHandler,
+  leaveAlbumHandler,
 } from "./albums.controller";
 
 const router = Router();
 
+const ALBUM_COLLECTION_PATH = "/";
+const ALBUM_ITEM_PATH = "/:albumId";
+const ALBUM_MEDIA_PATH = "/:albumId/media";
+const ALBUM_SHARES_PATH = "/:albumId/shares";
+const ALBUM_SHARE_MEMBER_PATH = "/:albumId/shares/:targetUserId";
+const ALBUM_LEAVE_PATH = "/:albumId/leave";
+
 // Album CRUD
-router.post("/", validate(createAlbumSchema), asyncHandler(createAlbum));
-router.get("/", validate(listAlbumsSchema), asyncHandler(listAlbums));
-router.get("/:id", validate(albumByIdParamSchema), asyncHandler(getAlbumById));
-router.patch("/:id", validate(updateAlbumSchema), asyncHandler(updateAlbum));
-router.delete("/:id", validate(albumByIdParamSchema), asyncHandler(deleteAlbum));
+router.post(ALBUM_COLLECTION_PATH, validate(createAlbumRequestSchema), asyncHandler(createAlbumHandler));
+router.get(ALBUM_COLLECTION_PATH, validate(listAlbumsQuerySchema), asyncHandler(listAlbumsHandler));
+router.get(ALBUM_ITEM_PATH, validate(albumIdParamsSchema), asyncHandler(getAlbumByIdHandler));
+router.patch(ALBUM_ITEM_PATH, validate(updateAlbumRequestSchema), asyncHandler(updateAlbumHandler));
+router.delete(ALBUM_ITEM_PATH, validate(albumIdParamsSchema), asyncHandler(deleteAlbumHandler));
 
 // Album media management
-router.post("/:id/media", validate(addMediaToAlbumSchema), asyncHandler(addMediaToAlbum));
-router.delete("/:id/media", validate(removeMediaFromAlbumSchema), asyncHandler(removeMediaFromAlbum));
+router.post(ALBUM_MEDIA_PATH, validate(addAlbumMediaRequestSchema), asyncHandler(addMediaToAlbumHandler));
+router.delete(ALBUM_MEDIA_PATH, validate(removeAlbumMediaRequestSchema), asyncHandler(removeMediaFromAlbumHandler));
 
 // Album sharing
-router.post("/:id/shares", validate(shareAlbumSchema), asyncHandler(shareAlbum));
-
-router.patch(
-  "/:id/shares/:userId",
-  validate(updateAlbumShareSchema),
-  asyncHandler(updateAlbumShare)
-);
-
-router.delete(
-  "/:id/shares/:userId",
-  validate(removeAlbumShareSchema),
-  asyncHandler(removeAlbumShare)
-);
+router.get(ALBUM_SHARES_PATH, validate(listAlbumSharesRequestSchema), asyncHandler(listAlbumSharesHandler));
+router.post(ALBUM_SHARES_PATH, validate(createAlbumShareRequestSchema), asyncHandler(shareAlbumHandler));
+router.patch(ALBUM_SHARE_MEMBER_PATH, validate(updateAlbumShareRequestSchema), asyncHandler(updateAlbumShareHandler));
+router.delete(ALBUM_SHARE_MEMBER_PATH, validate(removeAlbumShareRequestSchema), asyncHandler(removeAlbumShareHandler));
+router.post(ALBUM_LEAVE_PATH, validate(leaveAlbumRequestSchema), asyncHandler(leaveAlbumHandler));
 
 export default router;

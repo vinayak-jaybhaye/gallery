@@ -2,109 +2,158 @@ import { Router } from "express";
 import { validate } from "@/middlewares/validate.middleware";
 import { asyncHandler } from "@/utils/asyncHandler";
 import {
-  listMediaSchema,
-  listDeletedMediaSchema,
-  mediaByIdParamSchema,
-  updateMediaSchema,
-  deleteMediaSchema,
-  recoverMediaSchema,
-  createPublicShareSchema,
-  revokePublicShareSchema,
-  listSharedWithMeSchema,
-  listSharedByMeSchema,
-  listMyPublicLinksSchema,
-  shareMediaSchema,
-  removeMediaShareSchema,
-  sharesByIdSchema
+  listMediaLibraryQuerySchema,
+  listMediaTrashQuerySchema,
+  mediaIdParamsSchema,
+  updateMediaDetailsRequestSchema,
+  moveMediaToTrashRequestSchema,
+  restoreMediaFromTrashRequestSchema,
+  createPublicMediaLinkRequestSchema,
+  revokePublicMediaLinksRequestSchema,
+  listReceivedMediaQuerySchema,
+  listSentMediaQuerySchema,
+  listOwnedPublicLinksQuerySchema,
+  createMediaShareRequestSchema,
+  deleteMediaShareRequestSchema,
+  listMediaShareRecipientsRequestSchema,
+  listMediaPublicLinksRequestSchema
 } from "./media.schema";
 
 import {
-  listMedia,
-  getMediaById,
-  updateMedia,
-  deleteMedia,
-  listDeletedMedia,
-  recoverMedia,
-  deleteFromTrash,
-  emptyTrash,
-  listMediaSharedWithMe,
-  listMediaSharedByMe,
-  listMyPublicLinks,
-  shareMedia,
-  removeMediaShare,
-  createPublicShare,
-  revokePublicShare,
-  listMediaShares
+  listMediaLibraryHandler,
+  getMediaDetailsHandler,
+  updateMediaDetailsHandler,
+  moveMediaToTrashHandler,
+  listMediaTrashHandler,
+  restoreMediaFromTrashHandler,
+  permanentlyDeleteMediaFromTrashHandler,
+  emptyMediaTrashHandler,
+  listReceivedMediaHandler,
+  listSentMediaHandler,
+  listOwnedPublicLinksHandler,
+  createMediaShareHandler,
+  deleteMediaShareHandler,
+  createPublicMediaLinkHandler,
+  revokePublicMediaLinksHandler,
+  listMediaShareRecipientsHandler,
+  listMediaPublicLinksHandler
 } from "./media.controller";
 
 const router = Router();
 
-// list media shared with me
+const MEDIA_COLLECTION_PATH = "/";
+const MEDIA_ITEM_PATH = "/:mediaId";
+const MEDIA_TRASH_PATH = "/trash";
+const MEDIA_TRASH_ALL_PATH = "/trash/all";
+const MEDIA_TRASH_RESTORE_PATH = "/trash/restore";
+const RECEIVED_SHARES_PATH = "/shares/received";
+const SENT_SHARES_PATH = "/shares/sent";
+const OWNED_PUBLIC_LINKS_PATH = "/shares/public";
+const MEDIA_SHARES_PATH = "/:mediaId/shares";
+const MEDIA_SHARE_MEMBER_PATH = "/:mediaId/shares/:targetUserId";
+const MEDIA_PUBLIC_LINKS_PATH = "/:mediaId/shares/public";
+
+// Sharing and public links
 router.get(
-  "/shared-with-me",
-  validate(listSharedWithMeSchema),
-  asyncHandler(listMediaSharedWithMe)
+  RECEIVED_SHARES_PATH,
+  validate(listReceivedMediaQuerySchema),
+  asyncHandler(listReceivedMediaHandler)
 );
 
-// list user's shared media
 router.get(
-  "/shared-by-me",
-  validate(listSharedByMeSchema),
-  asyncHandler(listMediaSharedByMe)
+  SENT_SHARES_PATH,
+  validate(listSentMediaQuerySchema),
+  asyncHandler(listSentMediaHandler)
 );
 
-// list all public links
 router.get(
-  "/public-links",
-  validate(listMyPublicLinksSchema),
-  asyncHandler(listMyPublicLinks)
+  OWNED_PUBLIC_LINKS_PATH,
+  validate(listOwnedPublicLinksQuerySchema),
+  asyncHandler(listOwnedPublicLinksHandler)
 );
 
-// share media with { email }
+router.get(
+  MEDIA_PUBLIC_LINKS_PATH,
+  validate(listMediaPublicLinksRequestSchema),
+  asyncHandler(listMediaPublicLinksHandler)
+);
+
 router.post(
-  "/:mediaId/shares",
-  validate(shareMediaSchema),
-  asyncHandler(shareMedia)
+  MEDIA_SHARES_PATH,
+  validate(createMediaShareRequestSchema),
+  asyncHandler(createMediaShareHandler)
 );
 
-// get list of users media is shared wth
 router.get(
-  "/:mediaId/shares",
-  validate(sharesByIdSchema),
-  asyncHandler(listMediaShares)
+  MEDIA_SHARES_PATH,
+  validate(listMediaShareRecipientsRequestSchema),
+  asyncHandler(listMediaShareRecipientsHandler)
 );
 
-// unshare media for userId
 router.delete(
-  "/:mediaId/shares/:userId",
-  validate(removeMediaShareSchema),
-  asyncHandler(removeMediaShare)
+  MEDIA_SHARE_MEMBER_PATH,
+  validate(deleteMediaShareRequestSchema),
+  asyncHandler(deleteMediaShareHandler)
 );
 
-// public link sharing
 router.post(
-  "/:mediaId/public-share",
-  validate(createPublicShareSchema),
-  asyncHandler(createPublicShare)
+  MEDIA_PUBLIC_LINKS_PATH,
+  validate(createPublicMediaLinkRequestSchema),
+  asyncHandler(createPublicMediaLinkHandler)
 );
 
-// delete public link using shareId
 router.delete(
-  "/public-share",
-  validate(revokePublicShareSchema),
-  asyncHandler(revokePublicShare)
+  OWNED_PUBLIC_LINKS_PATH,
+  validate(revokePublicMediaLinksRequestSchema),
+  asyncHandler(revokePublicMediaLinksHandler)
 );
 
-router.get("/", validate(listMediaSchema), asyncHandler(listMedia));
-router.delete("/", validate(deleteMediaSchema), asyncHandler(deleteMedia));
+// Media library and trash management
+router.get(
+  MEDIA_COLLECTION_PATH,
+  validate(listMediaLibraryQuerySchema),
+  asyncHandler(listMediaLibraryHandler)
+);
 
-router.get("/trash", validate(listDeletedMediaSchema), asyncHandler(listDeletedMedia));
-router.delete("/trash", validate(deleteMediaSchema), asyncHandler(deleteFromTrash));
-router.delete("/trash/all", asyncHandler(emptyTrash));
+router.delete(
+  MEDIA_COLLECTION_PATH,
+  validate(moveMediaToTrashRequestSchema),
+  asyncHandler(moveMediaToTrashHandler)
+);
 
-router.post("/recover", validate(recoverMediaSchema), asyncHandler(recoverMedia));
+router.get(
+  MEDIA_TRASH_PATH,
+  validate(listMediaTrashQuerySchema),
+  asyncHandler(listMediaTrashHandler)
+);
 
-router.get("/:id", validate(mediaByIdParamSchema), asyncHandler(getMediaById));
-router.patch("/:id", validate(updateMediaSchema), asyncHandler(updateMedia));
+router.delete(
+  MEDIA_TRASH_PATH,
+  validate(moveMediaToTrashRequestSchema),
+  asyncHandler(permanentlyDeleteMediaFromTrashHandler)
+);
+
+router.delete(
+  MEDIA_TRASH_ALL_PATH,
+  asyncHandler(emptyMediaTrashHandler)
+);
+
+router.post(
+  MEDIA_TRASH_RESTORE_PATH,
+  validate(restoreMediaFromTrashRequestSchema),
+  asyncHandler(restoreMediaFromTrashHandler)
+);
+
+router.get(
+  MEDIA_ITEM_PATH,
+  validate(mediaIdParamsSchema),
+  asyncHandler(getMediaDetailsHandler)
+);
+
+router.patch(
+  MEDIA_ITEM_PATH,
+  validate(updateMediaDetailsRequestSchema),
+  asyncHandler(updateMediaDetailsHandler)
+);
 
 export default router;

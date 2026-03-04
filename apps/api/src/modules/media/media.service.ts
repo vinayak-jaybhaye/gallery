@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, Prisma } from "@/lib/prisma";
 import { s3Client } from "@/lib/s3";
 import crypto from "crypto";
 import { AppError } from "@/middlewares/error.middleware";
@@ -29,12 +29,12 @@ async function deleteObjectsBatch(keys: string[]) {
 }
 
 
-export async function listMediaService({
+export async function listMediaLibraryService({
   userId,
   lastCreatedAt,
   limit = 20,
   type,
-  albumId
+  albumId,
 }: {
   userId: string;
   lastCreatedAt?: Date;
@@ -42,35 +42,58 @@ export async function listMediaService({
   type?: "image" | "video";
   albumId?: string;
 }) {
-  // TODO:: add albums
-  const take = Math.min(limit, 100);
+  const where: Prisma.MediaWhereInput = {
+    status: {
+      in: ["ready", "processing"],
+    },
+
+    ...(albumId
+      ? {
+        // Only media inside this album
+        albumMedias: {
+          some: {
+            album: {
+              id: albumId,
+              OR: [
+                { ownerId: userId }, // user owns album
+                {
+                  shares: {
+                    some: { userId }, // album shared with user
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }
+      : {
+        // Only user's own media
+        ownerId: userId,
+      }),
+
+    ...(lastCreatedAt && {
+      createdAt: { lt: lastCreatedAt },
+    }),
+
+    ...(type && { type }),
+  };
 
   const items = await prisma.media.findMany({
-    where: {
-      ownerId: userId,
-      status: {
-        in: ["ready", "processing"]
-      },
-      ...(lastCreatedAt && {
-        createdAt: { lt: lastCreatedAt }
-      }),
-      ...(type && { type })
-    },
+    where,
     orderBy: [
       { createdAt: "desc" },
-      { id: "desc" }
+      { id: "desc" },
     ],
-    take: take + 1
+    take: limit + 1,
   });
 
   let nextCursor: string | null = null;
 
-  if (items.length > take) {
+  if (items.length > limit) {
     const nextItem = items.pop()!;
     nextCursor = nextItem.createdAt.toISOString();
   }
 
-  // Generate signed URLs in parallel
   const itemsWithUrls = await Promise.all(
     items.map(async (item) => {
       let thumbnailUrl: string | null = null;
@@ -78,11 +101,11 @@ export async function listMediaService({
       if (item.thumbnailKey) {
         const command = new GetObjectCommand({
           Bucket: BUCKET,
-          Key: item.thumbnailKey
+          Key: item.thumbnailKey,
         });
 
         thumbnailUrl = await getSignedUrl(s3Client, command, {
-          expiresIn: 60 * 5
+          expiresIn: 60 * 5,
         });
       }
 
@@ -102,11 +125,11 @@ export async function listMediaService({
 
   return {
     items: itemsWithUrls,
-    nextCursor
+    nextCursor,
   };
 }
 
-export async function getMediaByIdService({
+export async function getMediaDetailsService({
   userId,
   mediaId
 }: {
@@ -116,43 +139,73 @@ export async function getMediaByIdService({
   const media = await prisma.media.findFirst({
     where: {
       id: mediaId,
-      ownerId: userId,
       status: {
-        in: ["ready", "processing"]
-      }
-    }
+        in: ["ready", "processing"],
+      },
+      deletedAt: null,
+      OR: [
+        // Owner
+        { ownerId: userId },
+
+        // Direct media share
+        {
+          mediaShares: {
+            some: {
+              userId,
+            },
+          },
+        },
+
+        // Media is inside an album shared with user
+        {
+          albumMedias: {
+            some: {
+              album: {
+                OR: [
+                  { ownerId: userId },
+                  {
+                    shares: {
+                      some: { userId },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        }
+      ],
+    },
   });
 
   if (!media) {
     throw new AppError("Media not found", 404);
   }
 
-  const mediaKey = media.masterKey ?? media.originalKey;
+  const originalKey = media.masterKey ?? media.originalKey;
+  const thumbnailKey = media.thumbnailKey;
 
   const originalCommand = new GetObjectCommand({
     Bucket: BUCKET,
-    Key: mediaKey
+    Key: originalKey,
   });
 
-  const originalUrl = await getSignedUrl(s3Client, originalCommand, {
-    expiresIn: 60 * 5
-  });
-
-  let thumbnailUrl: string | null = null;
-
-  if (media.thumbnailKey) {
-    const thumbCommand = new GetObjectCommand({
+  const thumbnailCommand = thumbnailKey
+    ? new GetObjectCommand({
       Bucket: BUCKET,
-      Key: media.thumbnailKey
-    });
+      Key: thumbnailKey,
+    })
+    : null;
 
-    thumbnailUrl = await getSignedUrl(s3Client, thumbCommand, {
-      expiresIn: 60 * 5
-    });
-  }
+  const [originalUrl, thumbnailUrl] = await Promise.all([
+    getSignedUrl(s3Client, originalCommand, { expiresIn: 60 * 5 }),
+    thumbnailCommand
+      ? getSignedUrl(s3Client, thumbnailCommand, { expiresIn: 60 * 5 })
+      : Promise.resolve(null),
+  ]);
 
   return {
     id: media.id,
+    ownerId: media.ownerId,
     type: media.type,
     title: media.title,
     mimeType: media.mimeType,
@@ -168,7 +221,7 @@ export async function getMediaByIdService({
   }
 }
 
-export async function updateMediaService({
+export async function updateMediaDetailsService({
   userId,
   mediaId,
   data
@@ -196,7 +249,7 @@ export async function updateMediaService({
   });
 }
 
-export async function deleteMediaService({
+export async function moveMediaToTrashService({
   userId,
   mediaIds,
 }: {
@@ -221,13 +274,17 @@ export async function deleteMediaService({
     },
   });
 
+  if (result.count === 0) {
+    throw new AppError("Media not found or not accessible", 404);
+  }
+
   return {
     success: true,
     deletedCount: result.count,
   };
 }
 
-export async function listDeletedMediaService({
+export async function listMediaTrashService({
   userId,
   cursor,
   limit = 20,
@@ -293,7 +350,7 @@ export async function listDeletedMediaService({
   };
 }
 
-export async function recoverMediaService({
+export async function restoreMediaFromTrashService({
   userId,
   mediaIds,
 }: {
@@ -324,7 +381,7 @@ export async function recoverMediaService({
   };
 }
 
-export async function emptyTrashService(userId: string) {
+export async function emptyMediaTrashService(userId: string) {
   const media = await prisma.media.findMany({
     where: {
       ownerId: userId,
@@ -379,7 +436,7 @@ export async function emptyTrashService(userId: string) {
   };
 }
 
-export async function deleteFromTrashService({
+export async function permanentlyDeleteMediaFromTrashService({
   userId,
   mediaIds,
 }: {
@@ -443,7 +500,7 @@ export async function deleteFromTrashService({
 }
 
 // Media sharing services
-export async function shareMediaService({
+export async function createMediaShareService({
   userId,
   mediaId,
   email,
@@ -497,7 +554,7 @@ export async function shareMediaService({
   });
 }
 
-export async function removeMediaShareService({
+export async function deleteMediaShareService({
   userId,
   mediaId,
   targetUserId,
@@ -523,7 +580,7 @@ export async function removeMediaShareService({
   return { success: true };
 }
 
-export async function revokePublicShareService({
+export async function revokePublicMediaLinksService({
   userId,
   shareIds,
 }: {
@@ -553,14 +610,14 @@ export async function revokePublicShareService({
   };
 }
 
-export async function createPublicShareService({
+export async function createPublicMediaLinkService({
   userId,
   mediaId,
-  expiresInDays,
+  expiresInSeconds,
 }: {
   userId: string;
   mediaId: string;
-  expiresInDays?: number;
+  expiresInSeconds?: number;
 }) {
   return prisma.$transaction(async (tx) => {
     const media = await tx.media.findFirst({
@@ -581,14 +638,9 @@ export async function createPublicShareService({
 
     const token = crypto.randomBytes(32).toString("hex");
 
-    const expiresAt = expiresInDays
-      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+    const expiresAt = expiresInSeconds
+      ? new Date(Date.now() + expiresInSeconds * 1000)
       : null;
-
-    // Ensure only one public link per media
-    await tx.publicShare.deleteMany({
-      where: { mediaId },
-    });
 
     const share = await tx.publicShare.create({
       data: {
@@ -622,24 +674,44 @@ export async function getPublicMediaByTokenService(token: string) {
     throw new AppError("Link expired", 410);
   }
 
-  const command = new GetObjectCommand({
+  const originalKey = share.media.masterKey ?? share.media.originalKey;
+  const thumbnailKey = share.media.thumbnailKey;
+
+  const originalCommand = new GetObjectCommand({
     Bucket: BUCKET,
-    Key: share.media.masterKey ?? share.media.originalKey,
+    Key: originalKey,
   });
 
-  const signedUrl = await getSignedUrl(s3Client, command, {
-    expiresIn: 60 * 5,
-  });
+  const thumbnailCommand = thumbnailKey
+    ? new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: thumbnailKey,
+    })
+    : null;
+
+  const [originalUrl, thumbnailUrl] = await Promise.all([
+    getSignedUrl(s3Client, originalCommand, { expiresIn: 60 * 5 }),
+    thumbnailCommand
+      ? getSignedUrl(s3Client, thumbnailCommand, { expiresIn: 60 * 5 })
+      : Promise.resolve(null),
+  ]);
 
   return {
+    id: share.media.id,
     title: share.media.title,
+    createdAt: share.media.createdAt,
+    takenAt: share.media.takenAt,
+    durationSeconds: share.media.durationSeconds,
+    width: share.media.width,
+    height: share.media.height,
+    sizeBytes: share.media.sizeBytes,
     mimeType: share.media.mimeType,
-    signedUrl,
-    expiresAt: share.expiresAt,
+    originalUrl,
+    thumbnailUrl,
   };
 }
 
-export async function listMediaSharedWithMeService({
+export async function listReceivedMediaService({
   userId,
   cursor,
   limit = 20,
@@ -693,6 +765,7 @@ export async function listMediaSharedWithMeService({
         height: item.height,
         durationSeconds: item.durationSeconds,
         thumbnailUrl,
+        shareWithMeDate: share.createdAt
       };
     })
   );
@@ -703,7 +776,7 @@ export async function listMediaSharedWithMeService({
   };
 }
 
-export async function listMediaSharedByMeService({
+export async function listSentMediaService({
   userId,
   cursor,
   limit = 20,
@@ -757,7 +830,40 @@ export async function listMediaSharedByMeService({
   };
 }
 
-export async function listMyPublicLinksService({
+export async function listMediaPublicLinksService({
+  userId,
+  mediaId,
+}: {
+  userId: string;
+  mediaId: string;
+}) {
+  const shares = await prisma.publicShare.findMany({
+    where: {
+      mediaId,
+      media: {
+        ownerId: userId,
+      },
+    },
+    select: {
+      id: true,
+      token: true,
+      expiresAt: true,
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return shares.map((share) => ({
+    shareId: share.id,
+    token: share.token,
+    expiresAt: share.expiresAt,
+    createdAt: share.createdAt,
+  }));
+}
+
+export async function listOwnedPublicLinksService({
   userId,
   cursor,
   limit = 20,
@@ -781,6 +887,7 @@ export async function listMyPublicLinksService({
           id: true,
           type: true,
           title: true,
+          thumbnailKey: true,
         },
       },
     },
@@ -795,13 +902,55 @@ export async function listMyPublicLinksService({
     nextCursor = nextItem.createdAt.toISOString();
   }
 
+  // Collect unique thumbnail keys
+  const uniqueThumbnailKeys = Array.from(
+    new Set(
+      shares
+        .map((s) => s.media.thumbnailKey)
+        .filter(Boolean)
+    )
+  );
+
+  // Generate signed URLs once per key
+  const thumbnailMap: Record<string, string> = {};
+
+  await Promise.all(
+    uniqueThumbnailKeys.map(async (key) => {
+      const command = new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: key!,
+      });
+
+      const signed = await getSignedUrl(s3Client, command, {
+        expiresIn: 60 * 5,
+      });
+
+      thumbnailMap[key!] = signed;
+    })
+  );
+
+  // Map shares using cached URLs
+  const items = shares.map((share) => ({
+    shareId: share.id,
+    token: share.token,
+    expiresAt: share.expiresAt,
+    createdAt: share.createdAt,
+
+    mediaId: share.media.id,
+    type: share.media.type,
+    title: share.media.title,
+    thumbnailUrl: share.media.thumbnailKey
+      ? thumbnailMap[share.media.thumbnailKey]
+      : null,
+  }));
+
   return {
-    items: shares,
+    items,
     nextCursor,
   };
 }
 
-export async function listMediaSharesService({
+export async function listMediaShareRecipientsService({
   userId,
   mediaId,
 }: {

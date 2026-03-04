@@ -27,6 +27,16 @@ export const errorMiddleware = (
       ? err.message
       : "Internal Server Error";
 
+    console.log(err);
+    console.log(statusCode);
+    console.log(message);
+    console.log(req.body);
+    console.log(req.params);
+    console.log(req.query);
+    console.log(req.headers);
+    console.log(req.path);
+    console.log(req.method);
+
   res.status(statusCode).json({
     success: false,
     message

@@ -1,18 +1,20 @@
 import { Request, Response } from "express";
 import {
   createAlbumService,
-  listAlbumsService,
-  getAlbumByIdService,
-  updateAlbumService,
-  deleteAlbumService,
+  listAccessibleAlbumsService,
+  getAccessibleAlbumByIdService,
+  updateAlbumDetailsService,
+  deleteOwnedAlbumService,
   addMediaToAlbumService,
   removeMediaFromAlbumService,
-  shareAlbumService,
-  updateAlbumShareService,
-  removeAlbumShareService,
+  listAlbumCollaboratorsService,
+  shareAlbumWithUserService,
+  updateAlbumCollaboratorRoleService,
+  removeAlbumCollaboratorService,
+  leaveSharedAlbumService,
 } from "./albums.service";
 
-export async function createAlbum(req: Request, res: Response) {
+export async function createAlbumHandler(req: Request, res: Response) {
   const userId = req.user!.id;
   const { title, mediaIds } = req.body;
 
@@ -25,31 +27,31 @@ export async function createAlbum(req: Request, res: Response) {
   res.status(201).json(album);
 }
 
-export async function listAlbums(req: Request, res: Response) {
+export async function listAlbumsHandler(req: Request, res: Response) {
   const userId = req.user!.id;
 
   const { cursor, limit } = req.query as {
     cursor?: string;
-    limit?: string;
+    limit?: string | number;
   };
 
-  const result = await listAlbumsService({
+  const result = await listAccessibleAlbumsService({
     userId,
     lastCreatedAt: cursor ? new Date(cursor) : undefined,
-    limit: limit ? Number(limit) : undefined,
+    limit: limit !== undefined ? Number(limit) : undefined,
   });
 
   res.json(result);
 }
 
-export async function getAlbumById(
-  req: Request<{ id: string }>,
+export async function getAlbumByIdHandler(
+  req: Request<{ albumId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const albumId = req.params.id;
+  const albumId = req.params.albumId;
 
-  const album = await getAlbumByIdService({
+  const album = await getAccessibleAlbumByIdService({
     userId,
     albumId,
   });
@@ -57,14 +59,14 @@ export async function getAlbumById(
   res.json(album);
 }
 
-export async function updateAlbum(
-  req: Request<{ id: string }>,
+export async function updateAlbumHandler(
+  req: Request<{ albumId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const albumId = req.params.id;
+  const albumId = req.params.albumId;
 
-  const updated = await updateAlbumService({
+  const updated = await updateAlbumDetailsService({
     userId,
     albumId,
     data: req.body,
@@ -73,14 +75,14 @@ export async function updateAlbum(
   res.json(updated);
 }
 
-export async function deleteAlbum(
-  req: Request<{ id: string }>,
+export async function deleteAlbumHandler(
+  req: Request<{ albumId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const albumId = req.params.id;
+  const albumId = req.params.albumId;
 
-  const result = await deleteAlbumService({
+  const result = await deleteOwnedAlbumService({
     userId,
     albumId,
   });
@@ -88,12 +90,12 @@ export async function deleteAlbum(
   res.json(result);
 }
 
-export async function addMediaToAlbum(
-  req: Request<{ id: string }>,
+export async function addMediaToAlbumHandler(
+  req: Request<{ albumId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const albumId = req.params.id;
+  const albumId = req.params.albumId;
   const { mediaIds } = req.body;
 
   const result = await addMediaToAlbumService({
@@ -105,12 +107,12 @@ export async function addMediaToAlbum(
   res.json(result);
 }
 
-export async function removeMediaFromAlbum(
-  req: Request<{ id: string }>,
+export async function removeMediaFromAlbumHandler(
+  req: Request<{ albumId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const albumId = req.params.id;
+  const albumId = req.params.albumId;
   const { mediaIds } = req.body;
 
   const result = await removeMediaFromAlbumService({
@@ -122,34 +124,49 @@ export async function removeMediaFromAlbum(
   res.json(result);
 }
 
-export async function shareAlbum(
-  req: Request<{ id: string }>,
+export async function shareAlbumHandler(
+  req: Request<{ albumId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const albumId = req.params.id;
-  const { userId: targetUserId, role } = req.body;
+  const albumId = req.params.albumId;
+  const { email, role } = req.body;
 
-  const share = await shareAlbumService({
+  const share = await shareAlbumWithUserService({
     userId,
     albumId,
-    targetUserId,
+    email,
     role,
   });
 
   res.status(201).json(share);
 }
 
-export async function updateAlbumShare(
-  req: Request<{ id: string; userId: string }>,
+export async function listAlbumSharesHandler(
+  req: Request<{ albumId: string }>,
+  res: Response
+) {
+  const userId = req.user!.id;
+  const albumId = req.params.albumId;
+
+  const result = await listAlbumCollaboratorsService({
+    userId,
+    albumId,
+  });
+
+  res.json(result);
+}
+
+export async function updateAlbumShareHandler(
+  req: Request<{ albumId: string; targetUserId: string }>,
   res: Response
 ) {
   const ownerId = req.user!.id;
-  const albumId = req.params.id;
-  const targetUserId = req.params.userId;
+  const albumId = req.params.albumId;
+  const targetUserId = req.params.targetUserId;
   const { role } = req.body;
 
-  const share = await updateAlbumShareService({
+  const share = await updateAlbumCollaboratorRoleService({
     userId: ownerId,
     albumId,
     targetUserId,
@@ -159,18 +176,33 @@ export async function updateAlbumShare(
   res.json(share);
 }
 
-export async function removeAlbumShare(
-  req: Request<{ id: string; userId: string }>,
+export async function removeAlbumShareHandler(
+  req: Request<{ albumId: string; targetUserId: string }>,
   res: Response
 ) {
   const ownerId = req.user!.id;
-  const albumId = req.params.id;
-  const targetUserId = req.params.userId;
+  const albumId = req.params.albumId;
+  const targetUserId = req.params.targetUserId;
 
-  const result = await removeAlbumShareService({
+  const result = await removeAlbumCollaboratorService({
     userId: ownerId,
     albumId,
     targetUserId,
+  });
+
+  res.json(result);
+}
+
+export async function leaveAlbumHandler(
+  req: Request<{ albumId: string }>,
+  res: Response
+) {
+  const albumId = req.params.albumId;
+  const userId = req.user!.id;
+
+  const result = await leaveSharedAlbumService({
+    userId,
+    albumId,
   });
 
   res.json(result);

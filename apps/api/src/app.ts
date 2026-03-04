@@ -9,15 +9,16 @@ import userRoutes from "@/modules/user/user.routes";
 import albumsRoutes from "@/modules/albums/albums.routes";
 import { asyncHandler } from "./utils/asyncHandler";
 import { validate } from "./middlewares/validate.middleware";
-import { publicTokenParamSchema } from "@/modules/media/media.schema";
-import { getPublicMediaByToken } from "@/modules/media/media.controller";
+import { publicMediaTokenParamsSchema } from "@/modules/media/media.schema";
+import { getPublicMediaByTokenHandler } from "@/modules/media/media.controller";
 
 
 const app = express();
 
 app.use(cors(
   {
-    origin: process.env.FRONTEND_URL,
+    // origin: process.env.FRONTEND_URL,
+    origin: "*",
     credentials: true
   }
 ));
@@ -36,8 +37,8 @@ app.use("/albums", authMiddleware, albumsRoutes);
 
 app.get(
   "/public/:token",
-  validate(publicTokenParamSchema),
-  asyncHandler(getPublicMediaByToken)
+  validate(publicMediaTokenParamsSchema),
+  asyncHandler(getPublicMediaByTokenHandler)
 );
 
 app.get("/health", (_req, res) => {

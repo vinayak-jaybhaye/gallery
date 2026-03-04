@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-export const createAlbumSchema = {
+const albumIdParams = z.object({
+  albumId: z.uuid(),
+});
+
+const albumShareMemberParams = z.object({
+  albumId: z.uuid(),
+  targetUserId: z.uuid(),
+});
+
+export const createAlbumRequestSchema = {
   body: z.object({
     title: z.string().trim().min(1).max(255),
     mediaIds: z
@@ -14,30 +23,26 @@ export const createAlbumSchema = {
   }),
 };
 
-export const listAlbumsSchema = {
+export const listAlbumsQuerySchema = {
   query: z.object({
     cursor: z.iso.datetime().optional(),
     limit: z
       .string()
       .regex(/^\d+$/)
       .transform(Number)
-      .refine((val) => val > 0 && val <= 100, {
+      .refine((value) => value > 0 && value <= 100, {
         message: "Limit must be between 1 and 100",
       })
       .optional(),
   }),
 };
 
-export const albumByIdParamSchema = {
-  params: z.object({
-    id: z.uuid(),
-  }),
+export const albumIdParamsSchema = {
+  params: albumIdParams,
 };
 
-export const updateAlbumSchema = {
-  params: z.object({
-    id: z.uuid(),
-  }),
+export const updateAlbumRequestSchema = {
+  params: albumIdParams,
   body: z
     .object({
       title: z.string().trim().min(1).max(255).optional(),
@@ -48,10 +53,8 @@ export const updateAlbumSchema = {
     }),
 };
 
-export const addMediaToAlbumSchema = {
-  params: z.object({
-    id: z.uuid(),
-  }),
+export const addAlbumMediaRequestSchema = {
+  params: albumIdParams,
   body: z.object({
     mediaIds: z
       .array(z.uuid())
@@ -63,31 +66,29 @@ export const addMediaToAlbumSchema = {
   }),
 };
 
-export const removeMediaFromAlbumSchema = addMediaToAlbumSchema;
+export const removeAlbumMediaRequestSchema = addAlbumMediaRequestSchema;
 
-export const shareAlbumSchema = {
-  params: z.object({
-    id: z.uuid(),
-  }),
+export const createAlbumShareRequestSchema = {
+  params: albumIdParams,
   body: z.object({
-    userId: z.uuid(),
+    email: z.email(),
     role: z.enum(["viewer", "editor"]).default("viewer"),
   }),
 };
 
-export const updateAlbumShareSchema = {
-  params: z.object({
-    id: z.uuid(),
-    userId: z.uuid(),
-  }),
+export const listAlbumSharesRequestSchema = {
+  params: albumIdParams,
+};
+
+export const updateAlbumShareRequestSchema = {
+  params: albumShareMemberParams,
   body: z.object({
     role: z.enum(["viewer", "editor"]),
   }),
 };
 
-export const removeAlbumShareSchema = {
-  params: z.object({
-    id: z.uuid(),
-    userId: z.uuid(),
-  }),
+export const removeAlbumShareRequestSchema = {
+  params: albumShareMemberParams,
 };
+
+export const leaveAlbumRequestSchema = albumIdParamsSchema;

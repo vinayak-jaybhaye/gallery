@@ -1,25 +1,26 @@
 import { Request, Response } from "express";
 import {
-  listMediaService,
-  getMediaByIdService,
-  updateMediaService,
-  deleteMediaService,
-  recoverMediaService,
-  listDeletedMediaService,
-  emptyTrashService,
-  deleteFromTrashService,
-  shareMediaService,
-  removeMediaShareService,
-  createPublicShareService,
-  revokePublicShareService,
+  listMediaLibraryService,
+  getMediaDetailsService,
+  updateMediaDetailsService,
+  moveMediaToTrashService,
+  restoreMediaFromTrashService,
+  listMediaTrashService,
+  emptyMediaTrashService,
+  permanentlyDeleteMediaFromTrashService,
+  createMediaShareService,
+  deleteMediaShareService,
+  createPublicMediaLinkService,
+  revokePublicMediaLinksService,
   getPublicMediaByTokenService,
-  listMyPublicLinksService,
-  listMediaSharedWithMeService,
-  listMediaSharedByMeService,
-  listMediaSharesService
+  listOwnedPublicLinksService,
+  listReceivedMediaService,
+  listSentMediaService,
+  listMediaShareRecipientsService,
+  listMediaPublicLinksService
 } from "./media.service";
 
-export async function listMedia(
+export async function listMediaLibraryHandler(
   req: Request,
   res: Response
 ) {
@@ -32,7 +33,7 @@ export async function listMedia(
     albumId?: string;
   };
 
-  const result = await listMediaService({
+  const result = await listMediaLibraryService({
     userId,
     lastCreatedAt: cursor ? new Date(cursor) : undefined,
     limit,
@@ -43,14 +44,14 @@ export async function listMedia(
   res.json(result);
 }
 
-export async function getMediaById(
-  req: Request<{ id: string }>,
+export async function getMediaDetailsHandler(
+  req: Request<{ mediaId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const mediaId = req.params.id;
+  const mediaId = req.params.mediaId;
 
-  const media = await getMediaByIdService({
+  const media = await getMediaDetailsService({
     userId,
     mediaId
   });
@@ -58,14 +59,14 @@ export async function getMediaById(
   res.json(media);
 }
 
-export async function updateMedia(
-  req: Request<{ id: string }>,
+export async function updateMediaDetailsHandler(
+  req: Request<{ mediaId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
-  const mediaId = req.params.id;
+  const mediaId = req.params.mediaId;
 
-  const updated = await updateMediaService({
+  const updated = await updateMediaDetailsService({
     userId,
     mediaId,
     data: req.body
@@ -74,14 +75,14 @@ export async function updateMedia(
   res.json(updated);
 }
 
-export async function deleteMedia(
+export async function moveMediaToTrashHandler(
   req: Request,
   res: Response
 ) {
   const userId = req.user!.id;
   const mediaIds = req.body.mediaIds;
 
-  const result = await deleteMediaService({
+  const result = await moveMediaToTrashService({
     userId,
     mediaIds
   });
@@ -89,14 +90,14 @@ export async function deleteMedia(
   res.json(result);
 }
 
-export async function recoverMedia(
+export async function restoreMediaFromTrashHandler(
   req: Request,
   res: Response
 ) {
   const userId = req.user!.id;
   const mediaIds = req.body.mediaIds;
 
-  const result = await recoverMediaService({
+  const result = await restoreMediaFromTrashService({
     userId,
     mediaIds
   });
@@ -104,7 +105,7 @@ export async function recoverMedia(
   res.json(result);
 }
 
-export async function listDeletedMedia(
+export async function listMediaTrashHandler(
   req: Request,
   res: Response
 ) {
@@ -114,7 +115,7 @@ export async function listDeletedMedia(
     limit?: number;
   };
 
-  const result = await listDeletedMediaService({
+  const result = await listMediaTrashService({
     userId,
     cursor: cursor ? { id: cursor } : undefined,
     limit
@@ -123,33 +124,33 @@ export async function listDeletedMedia(
   res.json(result);
 }
 
-export async function emptyTrash(
+export async function emptyMediaTrashHandler(
   req: Request,
   res: Response
 ) {
   const userId = req.user!.id;
 
-  const result = await emptyTrashService(userId);
+  const result = await emptyMediaTrashService(userId);
 
   res.json(result);
 }
 
-export async function deleteFromTrash(
+export async function permanentlyDeleteMediaFromTrashHandler(
   req: Request,
   res: Response
 ) {
   const userId = req.user!.id;
   const mediaIds = req.body.mediaIds;
 
-  const result = await deleteFromTrashService({
+  const result = await permanentlyDeleteMediaFromTrashService({
     userId,
     mediaIds
   });
 
   res.json(result);
 }
-// media sharing
-export async function shareMedia(
+
+export async function createMediaShareHandler(
   req: Request<{ mediaId: string }>,
   res: Response
 ) {
@@ -157,7 +158,7 @@ export async function shareMedia(
   const mediaId = req.params.mediaId;
   const { email } = req.body;
 
-  const result = await shareMediaService({
+  const result = await createMediaShareService({
     userId,
     mediaId,
     email,
@@ -166,15 +167,15 @@ export async function shareMedia(
   res.status(201).json(result);
 }
 
-export async function removeMediaShare(
-  req: Request<{ mediaId: string; userId: string }>,
+export async function deleteMediaShareHandler(
+  req: Request<{ mediaId: string; targetUserId: string }>,
   res: Response
 ) {
   const ownerId = req.user!.id;
   const mediaId = req.params.mediaId;
-  const targetUserId = req.params.userId;
+  const targetUserId = req.params.targetUserId;
 
-  const result = await removeMediaShareService({
+  const result = await deleteMediaShareService({
     userId: ownerId,
     mediaId,
     targetUserId,
@@ -183,37 +184,36 @@ export async function removeMediaShare(
   res.json(result);
 }
 
-export async function createPublicShare(
+export async function createPublicMediaLinkHandler(
   req: Request<{ mediaId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
   const mediaId = req.params.mediaId;
-  const { expiresInDays } = req.body;
+  const { expiresInSeconds } = req.body;
 
-  const result = await createPublicShareService({
+  const result = await createPublicMediaLinkService({
     userId,
     mediaId,
-    expiresInDays,
+    expiresInSeconds,
   });
 
   res.status(201).json(result);
 }
 
-export async function revokePublicShare(
+export async function revokePublicMediaLinksHandler(
   req: Request,
   res: Response
 ) {
   const userId = req.user!.id;
   const shareIds = req.body.shareIds;
 
-  const result = await revokePublicShareService({ userId, shareIds });
+  const result = await revokePublicMediaLinksService({ userId, shareIds });
 
   res.json(result);
 }
 
-// public route
-export async function getPublicMediaByToken(
+export async function getPublicMediaByTokenHandler(
   req: Request<{ token: string }>,
   res: Response
 ) {
@@ -224,7 +224,7 @@ export async function getPublicMediaByToken(
   res.json(result);
 }
 
-export async function listMediaSharedWithMe(
+export async function listReceivedMediaHandler(
   req: Request,
   res: Response
 ) {
@@ -234,7 +234,7 @@ export async function listMediaSharedWithMe(
     limit?: number;
   };
 
-  const result = await listMediaSharedWithMeService({
+  const result = await listReceivedMediaService({
     userId,
     cursor,
     limit,
@@ -243,7 +243,7 @@ export async function listMediaSharedWithMe(
   res.json(result);
 }
 
-export async function listMediaSharedByMe(
+export async function listSentMediaHandler(
   req: Request,
   res: Response
 ) {
@@ -253,7 +253,7 @@ export async function listMediaSharedByMe(
     limit?: number;
   };
 
-  const result = await listMediaSharedByMeService({
+  const result = await listSentMediaService({
     userId,
     cursor,
     limit,
@@ -262,33 +262,48 @@ export async function listMediaSharedByMe(
   res.json(result);
 }
 
-export async function listMyPublicLinks(
-  req: Request,
-  res: Response
-) {
-  const userId = req.user!.id;
-  const { cursor, limit } = req.query as {
-    cursor?: string;
-    limit?: number;
-  };
-
-  const result = await listMyPublicLinksService({
-    userId,
-    cursor,
-    limit,
-  });
-
-  res.json(result);
-}
-
-export async function listMediaShares(
+export async function listMediaPublicLinksHandler(
   req: Request<{ mediaId: string }>,
   res: Response
 ) {
   const userId = req.user!.id;
   const mediaId = req.params.mediaId;
 
-  const result = await listMediaSharesService({
+  const result = await listMediaPublicLinksService({
+    userId,
+    mediaId,
+  });
+
+  res.json(result);
+}
+
+export async function listOwnedPublicLinksHandler(
+  req: Request,
+  res: Response
+) {
+  const userId = req.user!.id;
+  const { cursor, limit } = req.query as {
+    cursor?: string;
+    limit?: number;
+  };
+
+  const result = await listOwnedPublicLinksService({
+    userId,
+    cursor,
+    limit,
+  });
+
+  res.json(result);
+}
+
+export async function listMediaShareRecipientsHandler(
+  req: Request<{ mediaId: string }>,
+  res: Response
+) {
+  const userId = req.user!.id;
+  const mediaId = req.params.mediaId;
+
+  const result = await listMediaShareRecipientsService({
     userId,
     mediaId,
   });

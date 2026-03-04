@@ -12,10 +12,13 @@
     "db:push": "dotenv -e .env -- pnpm --filter @gallery/db db:push",
     "db:studio": "dotenv -e .env -- pnpm --filter @gallery/db db:studio",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "dev:services": "concurrently -n api,web,worker -c green,blue,magenta \"pnpm dev:api\" \"pnpm dev:web\" \"pnpm dev:worker\"",
+    "dev": "pnpm docker:up && pnpm db:migrate && pnpm dev:services"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "dotenv-cli": "^11.0.0"
   }
 }

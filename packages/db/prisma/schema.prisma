@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -50,6 +51,7 @@ model Media {
   publicShares  PublicShare[]
   albums        Album[]
 
+  @@index([ownerId, deletedAt(sort: Desc), id], where: { deletedAt: { not: null } })
   @@index([ownerId, status, createdAt(sort: Desc)])
 }
 

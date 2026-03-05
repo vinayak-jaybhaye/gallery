@@ -19,6 +19,7 @@ import {
   listMediaShareRecipientsService,
   listMediaPublicLinksService
 } from "./media.service";
+import { decodeTimeIdCursor } from "@/utils/paginationCursor";
 
 export async function listMediaLibraryHandler(
   req: Request,
@@ -35,7 +36,7 @@ export async function listMediaLibraryHandler(
 
   const result = await listMediaLibraryService({
     userId,
-    lastCreatedAt: cursor ? new Date(cursor) : undefined,
+    cursor: cursor ? decodeTimeIdCursor(cursor) : undefined,
     limit,
     type,
     albumId
@@ -117,7 +118,7 @@ export async function listMediaTrashHandler(
 
   const result = await listMediaTrashService({
     userId,
-    cursor: cursor ? { id: cursor } : undefined,
+    cursor: cursor ? decodeTimeIdCursor(cursor) : undefined,
     limit
   });
 
@@ -236,7 +237,7 @@ export async function listReceivedMediaHandler(
 
   const result = await listReceivedMediaService({
     userId,
-    cursor,
+    cursor: cursor ? decodeTimeIdCursor(cursor) : undefined,
     limit,
   });
 
@@ -255,7 +256,7 @@ export async function listSentMediaHandler(
 
   const result = await listSentMediaService({
     userId,
-    cursor,
+    cursor: cursor ? decodeTimeIdCursor(cursor) : undefined,
     limit,
   });
 
@@ -289,7 +290,7 @@ export async function listOwnedPublicLinksHandler(
 
   const result = await listOwnedPublicLinksService({
     userId,
-    cursor,
+    cursor: cursor ? decodeTimeIdCursor(cursor) : undefined,
     limit,
   });
 

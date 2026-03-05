@@ -9,6 +9,7 @@ import {
 import {
   getSignedUrl
 } from "@aws-sdk/s3-request-presigner";
+import { encodeTimeIdCursor, TimeIdCursor } from "@/utils/paginationCursor";
 
 const BUCKET = process.env.S3_BUCKET!;
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -31,13 +32,13 @@ async function deleteObjectsBatch(keys: string[]) {
 
 export async function listMediaLibraryService({
   userId,
-  lastCreatedAt,
+  cursor,
   limit = 20,
   type,
   albumId,
 }: {
   userId: string;
-  lastCreatedAt?: Date;
+  cursor?: TimeIdCursor;
   limit?: number;
   type?: "image" | "video";
   albumId?: string;
@@ -71,8 +72,11 @@ export async function listMediaLibraryService({
         ownerId: userId,
       }),
 
-    ...(lastCreatedAt && {
-      createdAt: { lt: lastCreatedAt },
+    ...(cursor && {
+      OR: [
+        { createdAt: { lt: cursor.time } },
+        { createdAt: cursor.time, id: { lt: cursor.id } },
+      ],
     }),
 
     ...(type && { type }),
@@ -91,7 +95,10 @@ export async function listMediaLibraryService({
 
   if (items.length > limit) {
     const nextItem = items.pop()!;
-    nextCursor = nextItem.createdAt.toISOString();
+    nextCursor = encodeTimeIdCursor({
+      time: nextItem.createdAt,
+      id: nextItem.id,
+    });
   }
 
   const itemsWithUrls = await Promise.all(
@@ -290,7 +297,7 @@ export async function listMediaTrashService({
   limit = 20,
 }: {
   userId: string;
-  cursor?: { id: string };
+  cursor?: TimeIdCursor;
   limit?: number;
 }) {
   const take = Math.min(limit, 100);
@@ -299,21 +306,28 @@ export async function listMediaTrashService({
     where: {
       ownerId: userId,
       status: "deleted",
+      ...(cursor && {
+        OR: [
+          { deletedAt: { lt: cursor.time } },
+          { deletedAt: cursor.time, id: { lt: cursor.id } },
+        ],
+      }),
     },
     orderBy: [
       { deletedAt: "desc" },
       { id: "desc" },
     ],
-    cursor: cursor ? { id: cursor.id } : undefined,
-    skip: cursor ? 1 : 0,
     take: take + 1,
   });
 
-  let nextCursor: { id: string } | null = null;
+  let nextCursor: string | null = null;
 
   if (items.length > take) {
     const nextItem = items.pop()!;
-    nextCursor = { id: nextItem.id };
+    nextCursor = encodeTimeIdCursor({
+      time: nextItem.deletedAt!,
+      id: nextItem.id,
+    });
   }
 
   // add thumbnail URLs
@@ -717,25 +731,32 @@ export async function listReceivedMediaService({
   limit = 20,
 }: {
   userId: string;
-  cursor?: string;
+  cursor?: TimeIdCursor;
   limit?: number;
 }) {
   const shares = await prisma.mediaShare.findMany({
-    where: { userId },
+    where: {
+      userId,
+      ...(cursor && {
+        OR: [
+          { createdAt: { lt: cursor.time } },
+          { createdAt: cursor.time, id: { lt: cursor.id } },
+        ],
+      }),
+    },
     include: { media: true },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
-    ...(cursor && {
-      cursor: { id: cursor },
-      skip: 1,
-    }),
   });
 
   let nextCursor: string | null = null;
 
   if (shares.length > limit) {
     const nextItem = shares.pop()!;
-    nextCursor = nextItem.id;
+    nextCursor = encodeTimeIdCursor({
+      time: nextItem.createdAt,
+      id: nextItem.id,
+    });
   }
 
   const items = await Promise.all(
@@ -782,7 +803,7 @@ export async function listSentMediaService({
   limit = 20,
 }: {
   userId: string;
-  cursor?: string;
+  cursor?: TimeIdCursor;
   limit?: number;
 }) {
   const mediaItems = await prisma.media.findMany({
@@ -793,7 +814,10 @@ export async function listSentMediaService({
         some: {},
       },
       ...(cursor && {
-        createdAt: { lt: new Date(cursor) },
+        OR: [
+          { createdAt: { lt: cursor.time } },
+          { createdAt: cursor.time, id: { lt: cursor.id } },
+        ],
       }),
     },
     select: {
@@ -815,7 +839,10 @@ export async function listSentMediaService({
 
   if (mediaItems.length > limit) {
     const nextItem = mediaItems.pop()!;
-    nextCursor = nextItem.createdAt.toISOString();
+    nextCursor = encodeTimeIdCursor({
+      time: nextItem.createdAt,
+      id: nextItem.id,
+    });
   }
 
   return {
@@ -869,13 +896,18 @@ export async function listOwnedPublicLinksService({
   limit = 20,
 }: {
   userId: string;
-  cursor?: string;
+  cursor?: TimeIdCursor;
   limit?: number;
 }) {
   const shares = await prisma.publicShare.findMany({
     where: {
       media: { ownerId: userId },
-      ...(cursor && { createdAt: { lt: new Date(cursor) } }),
+      ...(cursor && {
+        OR: [
+          { createdAt: { lt: cursor.time } },
+          { createdAt: cursor.time, id: { lt: cursor.id } },
+        ],
+      }),
     },
     select: {
       id: true,
@@ -899,7 +931,10 @@ export async function listOwnedPublicLinksService({
 
   if (shares.length > limit) {
     const nextItem = shares.pop()!;
-    nextCursor = nextItem.createdAt.toISOString();
+    nextCursor = encodeTimeIdCursor({
+      time: nextItem.createdAt,
+      id: nextItem.id,
+    });
   }
 
   // Collect unique thumbnail keys

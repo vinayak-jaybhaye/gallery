@@ -13,6 +13,7 @@ import {
   removeAlbumCollaboratorService,
   leaveSharedAlbumService,
 } from "./albums.service";
+import { decodeTimeIdCursor } from "@/utils/paginationCursor";
 
 export async function createAlbumHandler(req: Request, res: Response) {
   const userId = req.user!.id;
@@ -37,7 +38,7 @@ export async function listAlbumsHandler(req: Request, res: Response) {
 
   const result = await listAccessibleAlbumsService({
     userId,
-    lastCreatedAt: cursor ? new Date(cursor) : undefined,
+    cursor: cursor ? decodeTimeIdCursor(cursor) : undefined,
     limit: limit !== undefined ? Number(limit) : undefined,
   });
 

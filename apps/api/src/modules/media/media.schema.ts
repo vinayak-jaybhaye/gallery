@@ -10,7 +10,7 @@ const mediaShareMemberParams = z.object({
 });
 
 const cursorLimitQuerySchema = z.object({
-  cursor: z.iso.datetime().optional(),
+  cursor: z.string().min(1).optional(),
   limit: z
     .coerce.number()
     .int()
@@ -64,7 +64,7 @@ export const restoreMediaFromTrashRequestSchema = moveMediaToTrashRequestSchema;
 
 export const listMediaTrashQuerySchema = {
   query: z.object({
-    cursor: z.iso.datetime().optional(),
+    cursor: z.string().min(1).optional(),
     limit: z
       .coerce.number()
       .int()

@@ -3,6 +3,7 @@ import { s3Client } from "@/lib/s3";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AppError } from "@/middlewares/error.middleware"
+import { encodeTimeIdCursor, TimeIdCursor } from "@/utils/paginationCursor";
 
 const BUCKET = process.env.S3_BUCKET!;
 
@@ -103,13 +104,13 @@ export async function createAlbumService({
 
 interface ListAccessibleAlbumsParams {
   userId: string;
-  lastCreatedAt?: Date;
+  cursor?: TimeIdCursor;
   limit?: number;
 }
 
 export async function listAccessibleAlbumsService({
   userId,
-  lastCreatedAt,
+  cursor,
   limit = 20,
 }: ListAccessibleAlbumsParams) {
   const albums = await prisma.album.findMany({
@@ -118,8 +119,15 @@ export async function listAccessibleAlbumsService({
         { ownerId: userId },
         { shares: { some: { userId } } },
       ],
-      ...(lastCreatedAt && {
-        createdAt: { lt: lastCreatedAt },
+      ...(cursor && {
+        AND: [
+          {
+            OR: [
+              { createdAt: { lt: cursor.time } },
+              { createdAt: cursor.time, id: { lt: cursor.id } },
+            ],
+          },
+        ],
       }),
     },
     orderBy: [
@@ -151,7 +159,10 @@ export async function listAccessibleAlbumsService({
 
   if (albums.length > limit) {
     const nextItem = albums.pop()!;
-    nextCursor = nextItem.createdAt.toISOString();
+    nextCursor = encodeTimeIdCursor({
+      time: nextItem.createdAt,
+      id: nextItem.id,
+    });
   }
 
   // Generate signed URLs for cover thumbnails

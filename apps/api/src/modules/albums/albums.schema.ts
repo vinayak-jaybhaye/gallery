@@ -25,7 +25,7 @@ export const createAlbumRequestSchema = {
 
 export const listAlbumsQuerySchema = {
   query: z.object({
-    cursor: z.iso.datetime().optional(),
+    cursor: z.string().min(1).optional(),
     limit: z
       .string()
       .regex(/^\d+$/)

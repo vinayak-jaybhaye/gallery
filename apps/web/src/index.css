@@ -75,50 +75,65 @@ body {
     --font-ui: "Inter", sans-serif;
   }
 
+  button:not(:disabled),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [type="button"]:disabled,
+  [type="submit"]:disabled,
+  [type="reset"]:disabled {
+    cursor: not-allowed;
+  }
+
+  :root,
   .light {
-    /* Base / Light theme values - Google Photos style */
-    --bg-app: #ffffff;
-    --bg-subtle: #f8f9fa;
-    --bg-muted: #f1f3f4;
+    /* Base / Light theme values */
+    --bg-app: #f4f7fb;
+    --bg-subtle: #edf2f8;
+    --bg-muted: #e5ecf5;
 
     /* Surfaces */
-    --surface-default: #fafafa;
+    --surface-default: #f8faff;
     --surface-raised: #ffffff;
-    --surface-selected: #e8eaed;
+    --surface-selected: #dfe8f6;
 
     /* Text */
-    --text-primary: #202124;
-    --text-secondary: #5f6368;
-    --text-muted: #9aa0a6;
-    --text-inverse: #fafafa;
+    --text-primary: #172231;
+    --text-secondary: #4e5f76;
+    --text-muted: #74849b;
+    --text-inverse: #f7f9fc;
 
     /* Accent */
-    --accent-primary: #1a73e8;
-    --accent-soft: rgba(26, 115, 232, 0.12);
-    --accent-strong: #1557b0;
+    --accent-primary: #2563eb;
+    --accent-soft: rgba(37, 99, 235, 0.14);
+    --accent-strong: #1d4ed8;
 
     /* Borders */
-    --border-subtle: #e0e0e0;
-    --border-strong: #1967d2;
+    --border-subtle: #d3ddec;
+    --border-strong: #2563eb;
 
     /* Status */
-    --success: #1e8e3e;
-    --warning: #f9ab00;
+    --success: #1f7a3d;
+    --warning: #b97700;
     --error: #c5221f;
-    --info: #4285f4;
+    --info: #2563eb;
 
     /* Overlay and Disabled */
-    --overlay: rgba(0, 0, 0, 0.4);
-    --disabled: #bdc1c6;
+    --overlay: rgba(10, 18, 34, 0.42);
+    --disabled: #a8b4c5;
 
     /* Destructive */
-    --bg-destructive: #d93025;
+    --bg-destructive: #cb3a31;
     --text-destructive-foreground: #ffffff;
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.1);
-    --shadow-md: 0 1px 3px rgba(60, 64, 67, 0.15), 0 1px 2px rgba(60, 64, 67, 0.1);
-    --shadow-lg: 0 4px 8px rgba(60, 64, 67, 0.15), 0 1px 3px rgba(60, 64, 67, 0.1);
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 8px 20px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 20px 45px rgba(15, 23, 42, 0.12);
   }
 }
 

@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { useAuthStore } from '@/store/authStore'
 
 export function bootstrapTheme() {
   const stored = localStorage.getItem("theme");
@@ -17,6 +18,7 @@ export function bootstrapTheme() {
 
 (async function startApp() {
   bootstrapTheme();
+  useAuthStore.getState().initialize();
   createRoot(document.getElementById("root")!).render(
     <App />
   );

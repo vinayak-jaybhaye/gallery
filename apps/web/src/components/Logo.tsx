@@ -1,10 +1,12 @@
 export default function Logo({ className = "" }) {
   return (
-    <div className={`overflow-hidden ${className}`}>
+    <div className={`overflow-hidden select-none ${className}`}>
       <img
         src="/gallery.svg"
         alt="Gallery"
-        className="w-auto h-full"
+        draggable={false}
+        onDragStart={(event) => event.preventDefault()}
+        className="w-auto h-full select-none"
       />
     </div>
   );

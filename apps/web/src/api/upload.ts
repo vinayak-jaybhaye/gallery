@@ -67,7 +67,6 @@ export async function getPendingUploads() {
 }
 
 export async function startUpload(data: StartUploadInput) {
-  console.log("startUpload data:", data);
   try {
     const res = await api.post<StartUploadResponse>("/uploads", data);
     return res.data;

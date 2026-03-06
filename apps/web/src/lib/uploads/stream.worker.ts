@@ -62,7 +62,6 @@ function requestSignedUrls(partNumbers: number[]): Promise<Record<number, string
 }
 
 async function processLoop() {
-  console.log("[Worker] processLoop started, mediaId:", mediaId);
 
   let loopRetries = 0;
 

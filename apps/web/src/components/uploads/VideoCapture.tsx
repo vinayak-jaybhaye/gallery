@@ -117,12 +117,14 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
       const videoTracks = stream.getVideoTracks();
       const audioTracks = stream.getAudioTracks();
 
-      console.log("Video tracks:", videoTracks.length, videoTracks.map(t => t.label));
-      console.log("Audio tracks:", audioTracks.length, audioTracks.map(t => t.label));
+      if (videoTracks.length === 0) {
+        stream.getTracks().forEach(track => track.stop());
+        setError("No video track available. Please check your camera.");
+        setIsLoading(false);
+        return;
+      }
 
       if (audioTracks.length === 0) {
-        console.warn("No audio track available - trying to get audio separately");
-
         try {
           const audioStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
@@ -132,10 +134,7 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
           audioStream.getAudioTracks().forEach(track => {
             stream.addTrack(track);
           });
-
-          console.log("Added audio track separately");
         } catch (audioErr) {
-          console.error("Failed to get audio:", audioErr);
           // Continue without audio instead of blocking
         }
       }
@@ -147,7 +146,6 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
       }
 
       mimeTypeRef.current = mimeType;
-      console.log("Using mimeType:", mimeType);
 
       recorderRef.current = new MediaRecorder(stream, {
         mimeType,
@@ -364,7 +362,7 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
           <p className="text-white/70 mb-8">{error}</p>
           <button
             onClick={onClose}
-            className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full font-medium transition-colors"
+            className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full font-medium transition-colors"
           >
             Close
           </button>
@@ -381,7 +379,7 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             disabled={isRecording}
-            className="cursor-pointer p-2 rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
+            className="p-2 rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -440,7 +438,7 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             disabled={isRecording}
-            className="cursor-pointer w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -451,15 +449,15 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isLoading}
-            className="cursor-pointer relative w-20 h-20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="relative w-20 h-20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed group"
           >
             {/* Outer ring */}
             <div className={`absolute inset-0 rounded-full border-4 transition-all ${isRecording ? "border-red-500" : "border-white"} group-hover:scale-105 group-active:scale-95`} />
             {/* Inner shape */}
             <div
               className={`absolute transition-all duration-200 ${isRecording
-                  ? "inset-5 rounded-md bg-red-500" // Square stop button
-                  : "inset-2 rounded-full bg-red-500 group-hover:inset-2.5 group-active:inset-3" // Circle record button
+                ? "inset-5 rounded-md bg-red-500" // Square stop button
+                : "inset-2 rounded-full bg-red-500 group-hover:inset-2.5 group-active:inset-3" // Circle record button
                 }`}
             />
           </button>
@@ -469,7 +467,7 @@ export default function VideoCapture({ onClose }: { onClose: () => void }) {
             <button
               onClick={switchCamera}
               disabled={isLoading || isRecording}
-              className="cursor-pointer w-14 h-14 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title={`Switch to ${cameras[(currentCameraIndex + 1) % cameras.length]?.label || "next camera"}`}
             >
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

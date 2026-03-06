@@ -262,7 +262,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
           <p className="text-white/70 mb-8">{error}</p>
           <button
             onClick={onClose}
-            className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full font-medium transition-colors"
+            className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full font-medium transition-colors"
           >
             Close
           </button>
@@ -278,7 +278,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
         <div className="flex items-center justify-between p-4 safe-area-inset-top">
           <button
             onClick={onClose}
-            className="cursor-pointer p-2 rounded-full hover:bg-white/10 transition-colors"
+            className="p-2 rounded-full hover:bg-white/10 transition-colors"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -331,7 +331,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
           {/* Gallery placeholder / Cancel */}
           <button
             onClick={onClose}
-            className="cursor-pointer w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+            className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -342,7 +342,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
           <button
             onClick={capture}
             disabled={isLoading || isCapturing}
-            className="cursor-pointer relative w-20 h-20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed group"
+            className="relative w-20 h-20 rounded-full disabled:opacity-50 disabled:cursor-not-allowed group"
           >
             {/* Outer ring */}
             <div className="absolute inset-0 rounded-full border-4 border-white transition-transform group-hover:scale-105 group-active:scale-95" />
@@ -355,7 +355,7 @@ export default function CameraCapture({ onCapture, onClose }: Props) {
             <button
               onClick={switchCamera}
               disabled={isLoading}
-              className="cursor-pointer w-14 h-14 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-50"
+              className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors disabled:opacity-50"
               title={`Switch to ${cameras[(currentCameraIndex + 1) % cameras.length]?.label || "next camera"}`}
             >
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

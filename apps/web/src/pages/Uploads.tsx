@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
   getPendingUploads,
   abortUpload,
@@ -6,8 +7,13 @@ import {
 import { useUploadStore } from "@/store/uploadStore";
 import { uploadManager } from "@/lib/uploads/uploadManager";
 import { streamManager } from "@/lib/uploads/streamManager"
+import { getErrorMessage } from "@/lib/utils";
+import type { LayoutContext } from "@/components/layout/AppLayout";
+import { Loader } from "@/components/ui";
 
 export default function Uploads() {
+  const outlet = useOutletContext<LayoutContext | undefined>();
+  const searchQuery = outlet?.searchQuery ?? "";
   const uploads = useUploadStore((s) => s.uploads);
   const removeUpload = useUploadStore((s) => s.removeUpload);
   const bootstrapUploads = useUploadStore(
@@ -20,8 +26,10 @@ export default function Uploads() {
   const [loading, setLoading] = useState(true);
   const [abortingId, setAbortingId] = useState<string | null>(null);
   const [resumeTarget, setResumeTarget] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchKey = searchQuery.trim().toLowerCase();
 
   useEffect(() => {
     if (hasBootstrapped) {
@@ -31,10 +39,11 @@ export default function Uploads() {
 
     async function load() {
       try {
+        setError(null);
         const data = await getPendingUploads();
         bootstrapUploads(data);
       } catch (err) {
-        console.error("Failed to load uploads", err);
+        setError(getErrorMessage(err, "Failed to load uploads."));
       } finally {
         setLoading(false);
       }
@@ -45,6 +54,7 @@ export default function Uploads() {
 
   async function handleAbort(mediaId: string, source: "file" | "streaming") {
     try {
+      setError(null);
       setAbortingId(mediaId);
       if (source === "streaming") {
         streamManager.abortUpload(mediaId);
@@ -52,7 +62,7 @@ export default function Uploads() {
       await abortUpload(mediaId);
       removeUpload(mediaId);
     } catch (err) {
-      console.error("Abort failed", err);
+      setError(getErrorMessage(err, "Failed to abort upload."));
     } finally {
       setAbortingId(null);
     }
@@ -60,11 +70,12 @@ export default function Uploads() {
 
   function handleResumeClick(mediaId: string, source: "file" | "streaming") {
     if (source === "streaming") {
-      alert("stream uploads should always resumed on same device");
+      setError("Streaming uploads can only be resumed from the same device.");
       streamManager.startUpload(mediaId, "uploading");
       return;
     }
 
+    setError(null);
     setResumeTarget(mediaId);
     fileInputRef.current?.click();
   }
@@ -85,7 +96,8 @@ export default function Uploads() {
       formatSize(file.size) !== formatSize(upload.sizeBytes) ||
       file.type !== upload.mimeType
     ) {
-      alert("Selected file does not match original upload.");
+      setError("Selected file does not match the original upload.");
+      e.target.value = "";
       return;
     }
 
@@ -95,22 +107,47 @@ export default function Uploads() {
       file
     );
 
+    setError(null);
     setResumeTarget(null);
     e.target.value = ""; // reset input
   }
 
   const uploadList = Object.values(uploads);
+  const filteredUploadList = useMemo(() => {
+    if (!searchKey) return uploadList;
+
+    return uploadList.filter((upload) => {
+      const title = upload.title.toLowerCase();
+      const status = upload.status.toLowerCase();
+      const typeLabel = upload.type === "video" ? "video" : "image";
+      return (
+        title.includes(searchKey) ||
+        status.includes(searchKey) ||
+        typeLabel.includes(searchKey)
+      );
+    });
+  }, [searchKey, uploadList]);
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 bg-bg-app">
+    <div className="w-full p-4 sm:p-6 bg-bg-app">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6 sm:mb-8">
+        {error && (
+          <div className="mb-4 rounded-lg bg-bg-destructive px-3 py-2 text-sm text-text-destructive-foreground">
+            {error}
+          </div>
+        )}
+        <div className="sticky top-16 z-20 mb-6 bg-bg-app pb-4 pt-2 sm:mb-8">
           <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-primary mb-1">
             Uploads
           </h1>
           <p className="text-text-secondary text-sm">
             Manage your in-progress and paused uploads
           </p>
+          {searchKey && (
+            <p className="text-xs text-text-muted mt-2">
+              Searching uploads for: <span className="font-medium text-text-primary">{searchQuery.trim()}</span>
+            </p>
+          )}
         </div>
 
         <input
@@ -122,13 +159,7 @@ export default function Uploads() {
 
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <div className="flex items-center gap-3 text-text-muted">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <span>Loading uploads...</span>
-            </div>
+            <Loader size="md" label="Loading uploads..." />
           </div>
         )}
 
@@ -144,8 +175,15 @@ export default function Uploads() {
           </div>
         )}
 
+        {!loading && uploadList.length > 0 && filteredUploadList.length === 0 && searchKey && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-text-secondary font-medium mb-1">No uploads match your search</p>
+            <p className="text-text-muted text-sm">Try a different term</p>
+          </div>
+        )}
+
         <div className="space-y-3">
-          {uploadList.map((upload) => {
+          {filteredUploadList.map((upload) => {
             const progress =
               upload.sizeBytes > 0
                 ? Math.min(
@@ -218,7 +256,7 @@ export default function Uploads() {
                         onClick={() =>
                           handleResumeClick(upload.mediaId, upload.source)
                         }
-                        className="cursor-pointer inline-flex items-center gap-1.5 bg-accent-primary text-text-inverse px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent-strong transition-colors"
+                        className="inline-flex items-center gap-1.5 bg-accent-primary text-text-inverse px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent-strong transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -232,7 +270,7 @@ export default function Uploads() {
                       <button
                         disabled={abortingId === upload.mediaId}
                         onClick={() => handleAbort(upload.mediaId, upload.source)}
-                        className="cursor-pointer inline-flex items-center gap-1.5 bg-bg-destructive text-text-destructive-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-1.5 bg-bg-destructive text-text-destructive-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {abortingId === upload.mediaId ? (
                           <>

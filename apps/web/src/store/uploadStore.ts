@@ -89,7 +89,6 @@ export const useUploadStore = create<UploadState>((set) => ({
   },
 
   addUpload: (item) => {
-    console.log("Adding upload:", item);
     set((state) => ({
       uploads: {
         ...state.uploads,
@@ -100,7 +99,6 @@ export const useUploadStore = create<UploadState>((set) => ({
 
   // merge uploads with locally managed uploads, enrich state and update hasBootstapped
   bootstrapUploads: (uploads) => {
-    console.log("Bootstrapping uploads:", uploads)
     set((state) => {
       const newUploads = { ...state.uploads };
 

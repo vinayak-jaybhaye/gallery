@@ -2,7 +2,25 @@ import { useRef, useState, useEffect } from "react";
 import { useUpload } from "@/hooks/useUpload";
 import CameraCapture from "./CameraCapture";
 import VideoCapture from "./VideoCapture";
-import { Camera, Files, Video, Plus, X, Upload } from "lucide-react";
+import { Camera, Files, Video, Plus, X, Upload, ChevronRight, AlertCircle } from "lucide-react";
+
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+]);
+
+const ALLOWED_VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+
+const ACCEPTED_MIME_TYPES = [
+  ...ALLOWED_IMAGE_MIME_TYPES,
+  ...ALLOWED_VIDEO_MIME_TYPES,
+].join(",");
 
 export default function UploadFAB() {
   const { uploadFile, loading, error } = useUpload();
@@ -15,14 +33,85 @@ export default function UploadFAB() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Clear error after 3 seconds
-  useEffect(() => {
-    if (error) {
-      setRecentError(error);
-      const timer = setTimeout(() => setRecentError(null), 3000);
-      return () => clearTimeout(timer);
+  function isValidUploadMimeType(file: File) {
+    const mimeType = file.type.trim().toLowerCase();
+
+    if (!mimeType) return false;
+
+    if (mimeType.startsWith("image/")) {
+      return ALLOWED_IMAGE_MIME_TYPES.has(mimeType);
     }
+
+    if (mimeType.startsWith("video/")) {
+      return ALLOWED_VIDEO_MIME_TYPES.has(mimeType);
+    }
+
+    return false;
+  }
+
+  function toFriendlyUploadError(message: string) {
+    const normalized = message.toLowerCase();
+
+    if (
+      normalized.includes("network")
+      || normalized.includes("unable to reach server")
+      || normalized.includes("failed to fetch")
+    ) {
+      return "Upload failed. Check your internet connection and try again.";
+    }
+
+    if (
+      normalized.includes("413")
+      || normalized.includes("too large")
+      || normalized.includes("payload too large")
+    ) {
+      return "File is too large to upload.";
+    }
+
+    if (normalized.includes("invalid upload response")) {
+      return "Upload failed due to an invalid server response. Please try again.";
+    }
+
+    if (
+      normalized.includes("mimetype")
+      && (normalized.includes("invalid") || normalized.includes("enum"))
+    ) {
+      return "Unsupported file format. Allowed: JPEG, PNG, WEBP, HEIC, MP4, MOV, WEBM.";
+    }
+
+    return message;
+  }
+
+  function showRecentError(message: string) {
+    setRecentError(message);
+  }
+
+  function showInvalidMimeTypeError(count: number) {
+    if (count <= 0) return;
+
+    showRecentError(
+      count === 1
+        ? "1 file was skipped due to invalid or unsupported MIME type."
+        : `${count} files were skipped due to invalid or unsupported MIME types.`
+    );
+  }
+
+  // Display upload errors from the hook in user-friendly format.
+  useEffect(() => {
+    if (!error) return;
+    showRecentError(toFriendlyUploadError(error));
   }, [error]);
+
+  // Auto-dismiss toast errors after a short delay.
+  useEffect(() => {
+    if (!recentError) return;
+
+    const hideTimer = window.setTimeout(() => {
+      setRecentError(null);
+    }, 4500);
+
+    return () => window.clearTimeout(hideTimer);
+  }, [recentError]);
 
   // Global drag and drop
   useEffect(() => {
@@ -50,12 +139,18 @@ export default function UploadFAB() {
 
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
-        // Upload first file
-        // TODO:: allow multiple files
-        const file = files[0];
-        if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-          uploadFile(file);
-        }
+        let invalidMimeTypeCount = 0;
+
+        Array.from(files).forEach((file) => {
+          if (isValidUploadMimeType(file)) {
+            uploadFile(file);
+            return;
+          }
+
+          invalidMimeTypeCount += 1;
+        });
+
+        showInvalidMimeTypeError(invalidMimeTypeCount);
       }
     }
 
@@ -74,11 +169,18 @@ export default function UploadFAB() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // Upload files
+    let invalidMimeTypeCount = 0;
+
     Array.from(files).forEach((file) => {
+      if (!isValidUploadMimeType(file)) {
+        invalidMimeTypeCount += 1;
+        return;
+      }
+
       uploadFile(file);
     });
 
+    showInvalidMimeTypeError(invalidMimeTypeCount);
     setOpen(false);
     e.target.value = ""; // Reset input
   }
@@ -94,35 +196,15 @@ export default function UploadFAB() {
     uploadFile(file);
   }
 
-  const menuItems = [
-    {
-      label: "Upload photos or videos",
-      icon: Files,
-      iconBg: "bg-accent-soft",
-      iconColor: "text-accent-primary",
-      onClick: () => fileInputRef.current?.click(),
-    },
-    {
-      label: "Take photo",
-      icon: Camera,
-      iconBg: "bg-emerald-500/15",
-      iconColor: "text-emerald-500",
-      onClick: () => {
-        setCameraOpen(true);
-        setOpen(false);
-      },
-    },
-    {
-      label: "Record video",
-      icon: Video,
-      iconBg: "bg-red-500/15",
-      iconColor: "text-red-500",
-      onClick: () => {
-        setStreamOn(true);
-        setOpen(false);
-      },
-    },
-  ];
+  function handleOpenCamera() {
+    setCameraOpen(true);
+    setOpen(false);
+  }
+
+  function handleOpenVideo() {
+    setStreamOn(true);
+    setOpen(false);
+  }
 
   return (
     <>
@@ -152,51 +234,105 @@ export default function UploadFAB() {
         {/* Backdrop */}
         {open && (
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm -z-10 transition-opacity"
+            className="fixed inset-0 bg-black/35 backdrop-blur-[2px] -z-10 transition-opacity"
             onClick={() => setOpen(false)}
           />
         )}
 
-        {/* Menu */}
+        {/* Upload Panel */}
         <div
-          className={`absolute bottom-20 right-0 transition-all duration-300 ${open
-            ? "opacity-100 translate-y-0 pointer-events-auto"
-            : "opacity-0 translate-y-4 pointer-events-none"
+          className={`absolute bottom-20 right-0 w-[min(92vw,360px)] origin-bottom-right transition-all duration-250 ${open
+            ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+            : "opacity-0 scale-95 translate-y-2 pointer-events-none"
             }`}
         >
-          <div className="bg-surface-raised border border-border-subtle rounded-2xl shadow-2xl overflow-hidden min-w-[220px]">
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-border-subtle bg-bg-muted/50">
-              <p className="text-xs font-medium text-text-muted uppercase tracking-wider">
-                Add to gallery
-              </p>
-            </div>
-
-            {/* Menu Items */}
-            <div className="py-2">
-              {menuItems.map((item, index) => (
+          <div className="overflow-hidden rounded-3xl border border-border-subtle bg-surface-raised shadow-[0_24px_64px_-28px_rgba(0,0,0,0.45)]">
+            <div className="max-h-[min(70vh,560px)] overflow-y-auto">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border-subtle bg-surface-raised/95 px-5 py-4 backdrop-blur-sm">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+                    Quick Upload
+                  </p>
+                  <h3 className="mt-1 text-base font-semibold text-text-primary">
+                    Add media to gallery
+                  </h3>
+                </div>
                 <button
-                  key={index}
-                  onClick={item.onClick}
-                  className="cursor-pointer w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-selected transition-colors text-left"
+                  aria-label="Close upload panel"
+                  onClick={() => setOpen(false)}
+                  className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary"
                 >
-                  <div
-                    className={`w-10 h-10 rounded-full ${item.iconBg} flex items-center justify-center flex-shrink-0`}
-                  >
-                    <item.icon className={`w-5 h-5 ${item.iconColor}`} />
-                  </div>
-                  <span className="text-sm font-medium text-text-primary">
-                    {item.label}
-                  </span>
+                  <X className="h-4 w-4" />
                 </button>
-              ))}
-            </div>
+              </div>
 
-            {/* Drag hint (desktop only) */}
-            <div className="hidden sm:block px-4 py-3 border-t border-border-subtle bg-bg-muted/30">
-              <p className="text-xs text-text-muted text-center">
-                Or drag and drop files anywhere
-              </p>
+              <div className="space-y-2 p-2.5">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group w-full rounded-2xl border border-transparent px-3.5 py-3 text-left transition-all hover:border-border-subtle hover:bg-bg-muted/55"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-primary">
+                      <Files className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-text-primary">
+                        Upload from device
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        Choose photos or videos from your files
+                      </p>
+                    </div>
+                    <ChevronRight className="mt-2 h-4 w-4 flex-shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleOpenCamera}
+                  className="group w-full rounded-2xl border border-transparent px-3.5 py-3 text-left transition-all hover:border-border-subtle hover:bg-bg-muted/55"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500">
+                      <Camera className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-text-primary">
+                        Take photo
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        Open your camera and capture an image
+                      </p>
+                    </div>
+                    <ChevronRight className="mt-2 h-4 w-4 flex-shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleOpenVideo}
+                  className="group w-full rounded-2xl border border-transparent px-3.5 py-3 text-left transition-all hover:border-border-subtle hover:bg-bg-muted/55"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-red-500">
+                      <Video className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-text-primary">
+                        Record video
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        Start a quick video recording session
+                      </p>
+                    </div>
+                    <ChevronRight className="mt-2 h-4 w-4 flex-shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </button>
+              </div>
+
+              <div className="border-t border-border-subtle bg-bg-muted/30 px-5 py-3">
+                <p className="text-center text-xs text-text-muted">
+                  Tip: drag and drop files anywhere on the page
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -205,13 +341,16 @@ export default function UploadFAB() {
         <button
           onClick={() => setOpen((prev) => !prev)}
           disabled={loading}
-          className={`cursor-pointer relative w-14 h-14 lg:w-16 lg:h-16 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${open
-            ? "bg-surface-raised text-text-primary rotate-45 scale-90"
-            : "bg-accent-primary text-white hover:bg-accent-strong hover:scale-110 hover:shadow-2xl"
-            } disabled:opacity-50 disabled:hover:scale-100`}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label={open ? "Close upload options" : "Open upload options"}
+          className={`relative inline-flex h-14 w-14 items-center justify-center rounded-full border shadow-lg transition-all duration-200 sm:h-14 sm:w-auto sm:px-4 ${open
+            ? "border-border-subtle bg-surface-raised text-text-primary"
+            : "border-accent-strong/30 bg-accent-primary text-white hover:bg-accent-strong"
+            } disabled:cursor-not-allowed disabled:opacity-50`}
         >
           {loading ? (
-            <svg className="animate-spin w-6 h-6 lg:w-7 lg:h-7" viewBox="0 0 24 24">
+            <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24">
               <circle
                 className="opacity-25"
                 cx="12"
@@ -227,15 +366,18 @@ export default function UploadFAB() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-          ) : open ? (
-            <X className="w-6 h-6 lg:w-7 lg:h-7" />
           ) : (
-            <Plus className="w-6 h-6 lg:w-7 lg:h-7" />
+            <>
+              {open ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Plus className="h-5 w-5" />
+              )}
+            </>
           )}
 
-          {/* Pulsing ring when idle */}
-          {!open && !loading && (
-            <span className="absolute inset-0 rounded-full bg-accent-primary animate-ping opacity-20" />
+          {!loading && (
+            <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-black/5" />
           )}
         </button>
 
@@ -271,12 +413,25 @@ export default function UploadFAB() {
 
         {/* Error Toast */}
         {recentError && !loading && (
-          <div className="absolute -top-16 right-0 animate-in slide-in-from-bottom-2 fade-in duration-200">
-            <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 shadow-lg">
-              <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                <X className="w-4 h-4 text-red-500" />
+          <div className="absolute bottom-[calc(100%+0.75rem)] right-0 w-[min(92vw,360px)] animate-in slide-in-from-bottom-2 fade-in duration-200">
+            <div
+              role="alert"
+              className="rounded-xl border border-error/25 bg-error/10 px-3 py-2.5 shadow-lg backdrop-blur-sm"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-error" />
+                <p className="min-w-0 flex-1 text-sm font-medium leading-5 text-error">
+                  {recentError}
+                </p>
+                <button
+                  type="button"
+                  aria-label="Dismiss upload error"
+                  onClick={() => setRecentError(null)}
+                  className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-error/80 transition-colors hover:bg-error/15 hover:text-error"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <p className="text-sm font-medium text-red-500">{recentError}</p>
             </div>
           </div>
         )}
@@ -286,7 +441,7 @@ export default function UploadFAB() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,video/*"
+        accept={ACCEPTED_MIME_TYPES}
         multiple
         className="hidden"
         onChange={handleFileChange}

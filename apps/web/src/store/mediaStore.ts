@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 export type Media = {
   id: string;
+  ownerId?: string;
   type: "image" | "video";
   title: string;
   thumbnailUrl?: string;
@@ -14,85 +15,83 @@ export type Media = {
   mimeType?: string;
   sizeBytes?: number;
   updatedAt?: string;
+  shareWithMeDate?: string;
 };
-
-type QueryKey = "all" | "videos" | "images";
 
 type QueryState = {
   ids: string[];
   nextCursor?: string;
-  hasMore?: boolean;
+  hasMore: boolean;
 };
 
 type MediaStore = {
   entities: Record<string, Media>;
-  queries: Record<QueryKey, QueryState>;
+  queries: Record<string, QueryState>;
 
-  setMedia: (key: QueryKey, items: Media[], cursor?: string) => void;
-  appendMedia: (key: QueryKey, items: Media[], cursor?: string) => void;
+  setMedia: (key: string, items: Media[], cursor?: string) => void;
+  appendMedia: (key: string, items: Media[], cursor?: string) => void;
 
   enrichMedia: (detail: Media) => void;
   getMediaById: (id: string) => Media | null;
-  getMediaForQuery: (key: QueryKey) => Media[];
+  getMediaForQuery: (key: string) => Media[];
 
   deleteMedia: (id: string) => void;
-  addMediaAtTop: (key: QueryKey, media: Media) => void;
+  addMediaAtTop: (key: string, media: Media) => void;
 
-  clearQuery: (key: QueryKey) => void;
+  clearQuery: (key: string) => void;
   clearAll: () => void;
 };
 
 export const useMediaStore = create<MediaStore>((set, get) => ({
   entities: {},
 
-  queries: {
-    all: { ids: [] },
-    videos: { ids: [] },
-    images: { ids: [] },
-  },
+  queries: {},
 
-  // Replace entire list
   setMedia: (key, items, cursor) =>
     set((state) => {
-      const newEntities = { ...state.entities };
+      const entities = { ...state.entities };
 
       items.forEach((item) => {
-        newEntities[item.id] = item;
+        entities[item.id] = item;
       });
 
       return {
-        entities: newEntities,
+        entities,
         queries: {
           ...state.queries,
           [key]: {
             ids: items.map((i) => i.id),
             nextCursor: cursor,
+            hasMore: !!cursor,
           },
         },
       };
     }),
 
-  // Append paginated results
   appendMedia: (key, items, cursor) =>
     set((state) => {
-      const newEntities = { ...state.entities };
-      const existingIds = state.queries[key].ids;
+      const entities = { ...state.entities };
+      const prev = state.queries[key] ?? {
+        ids: [],
+        hasMore: false,
+      };
 
       items.forEach((item) => {
-        newEntities[item.id] = item;
+        entities[item.id] = item;
       });
 
-      const newIds = items
-        .map((i) => i.id)
-        .filter((id) => !existingIds.includes(id));
+      const idSet = new Set(prev.ids);
+
+      items.forEach((i) => idSet.add(i.id));
 
       return {
-        entities: newEntities,
+        entities,
         queries: {
           ...state.queries,
           [key]: {
-            ids: [...existingIds, ...newIds],
+            ids: Array.from(idSet),
             nextCursor: cursor,
+            hasMore: !!cursor,
           },
         },
       };
@@ -113,60 +112,63 @@ export const useMediaStore = create<MediaStore>((set, get) => ({
 
   getMediaForQuery: (key) => {
     const { entities, queries } = get();
-    return queries[key].ids.map((id) => entities[id]).filter(Boolean);
+    const query = queries[key];
+    if (!query) return [];
+    return query.ids.map((id) => entities[id]).filter(Boolean);
   },
 
   deleteMedia: (id) =>
     set((state) => {
-      const newEntities = { ...state.entities };
-      delete newEntities[id];
+      const entities = { ...state.entities };
+      delete entities[id];
 
-      const newQueries = Object.fromEntries(
-        Object.entries(state.queries).map(([key, query]) => [
-          key,
+      const queries = Object.fromEntries(
+        Object.entries(state.queries).map(([k, q]) => [
+          k,
           {
-            ...query,
-            ids: query.ids.filter((i) => i !== id),
+            ...q,
+            ids: q.ids.filter((i) => i !== id),
           },
         ])
-      ) as Record<QueryKey, QueryState>;
+      );
 
-      return {
-        entities: newEntities,
-        queries: newQueries,
-      };
+      return { entities, queries };
     }),
 
   addMediaAtTop: (key, media) =>
-    set((state) => ({
-      entities: {
-        ...state.entities,
-        [media.id]: media,
-      },
-      queries: {
-        ...state.queries,
-        [key]: {
-          ...state.queries[key],
-          ids: [media.id, ...state.queries[key].ids],
+    set((state) => {
+      const prev = state.queries[key] ?? { ids: [], hasMore: false };
+
+      return {
+        entities: {
+          ...state.entities,
+          [media.id]: media,
         },
-      },
-    })),
+        queries: {
+          ...state.queries,
+          [key]: {
+            ...prev,
+            ids: [media.id, ...prev.ids.filter((id) => id !== media.id)],
+          },
+        },
+      };
+    }),
 
   clearQuery: (key) =>
     set((state) => ({
       queries: {
         ...state.queries,
-        [key]: { ids: [] },
+        [key]: {
+          ids: [],
+          nextCursor: undefined,
+          hasMore: false,
+        },
       },
     })),
 
   clearAll: () =>
     set({
       entities: {},
-      queries: {
-        all: { ids: [] },
-        videos: { ids: [] },
-        images: { ids: [] },
-      },
+      queries: {},
     }),
 }));

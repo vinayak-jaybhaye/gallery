@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
   listDeletedMedia,
   recoverMedia,
@@ -6,39 +7,115 @@ import {
   emptyTrash,
   type TrashItem,
 } from "@/api/media";
+import type { LayoutContext } from "@/components/layout/AppLayout";
+import { ConfirmDialog } from "@/components/ui";
+import { getErrorMessage } from "@/lib/utils";
 
 export default function TrashPage() {
+  const outlet = useOutletContext<LayoutContext | undefined>();
+  const searchQuery = outlet?.searchQuery ?? "";
   const [items, setItems] = useState<TrashItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEmptyConfirm, setShowEmptyConfirm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlightCursorRef = useRef<string | null>(null);
+  const loadedCursorsRef = useRef<Set<string>>(new Set());
+  const lastTriggerScrollYRef = useRef<number>(-1);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const searchKey = searchQuery.trim().toLowerCase();
 
   useEffect(() => {
     loadInitial();
   }, []);
 
+  useEffect(() => {
+    setSelected(new Set());
+  }, [searchKey]);
+
   async function loadInitial() {
-    const data = await listDeletedMedia();
-    setItems(data.items);
-    setNextCursor(data.nextCursor);
+    try {
+      setError(null);
+      inFlightCursorRef.current = null;
+      loadedCursorsRef.current.clear();
+      lastTriggerScrollYRef.current = -1;
+      const data = await listDeletedMedia();
+      setItems(getUniqueTrashItems(data.items));
+      setNextCursor(data.nextCursor);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to load trash items."));
+    }
   }
 
-  async function loadMore() {
-    if (!nextCursor) return;
+  const loadMore = useCallback(async () => {
+    const cursor = nextCursor;
+    if (!cursor || inFlightCursorRef.current || loadedCursorsRef.current.has(cursor)) return;
+
+    inFlightCursorRef.current = cursor;
     setLoadingMore(true);
 
-    const data = await listDeletedMedia(nextCursor);
+    try {
+      setError(null);
+      const data = await listDeletedMedia(cursor);
+      setItems((prev) => getUniqueTrashItems([...prev, ...data.items]));
+      loadedCursorsRef.current.add(cursor);
+      const resolvedNextCursor =
+        data.nextCursor && data.nextCursor !== cursor ? data.nextCursor : undefined;
+      setNextCursor(resolvedNextCursor);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to load more trash items."));
+      setNextCursor(undefined);
+    } finally {
+      inFlightCursorRef.current = null;
+      setLoadingMore(false);
+    }
+  }, [nextCursor]);
 
-    setItems((prev) => [...prev, ...data.items]);
-    setNextCursor(data.nextCursor);
-    setLoadingMore(false);
-  }
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          nextCursor &&
+          !inFlightCursorRef.current &&
+          !loadedCursorsRef.current.has(nextCursor)
+        ) {
+          const scrollY =
+            window.scrollY ||
+            document.documentElement.scrollTop ||
+            document.body.scrollTop ||
+            0;
+          if (
+            lastTriggerScrollYRef.current !== -1 &&
+            Math.abs(scrollY - lastTriggerScrollYRef.current) < 48
+          ) {
+            return;
+          }
+          lastTriggerScrollYRef.current = scrollY;
+          void loadMore();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [nextCursor, loadMore]);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const copy = new Set(prev);
-      copy.has(id) ? copy.delete(id) : copy.add(id);
+      if (copy.has(id)) {
+        copy.delete(id);
+      } else {
+        copy.add(id);
+      }
       return copy;
     });
   }
@@ -48,93 +125,123 @@ export default function TrashPage() {
     setActionLoading("recover");
 
     const ids = Array.from(selected);
-    await recoverMedia(ids);
-
-    setItems((prev) => prev.filter((i) => !selected.has(i.id)));
-    setSelected(new Set());
-    setActionLoading(null);
+    try {
+      setError(null);
+      await recoverMedia(ids);
+      setItems((prev) => prev.filter((i) => !selected.has(i.id)));
+      setSelected(new Set());
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to recover selected media."));
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function handleDeletePermanent() {
-    if (!selected.size) return;
+    if (!selected.size) {
+      setShowDeleteConfirm(false);
+      return;
+    }
     setActionLoading("delete");
 
     const ids = Array.from(selected);
-    await deleteFromTrash(ids);
-
-    setItems((prev) => prev.filter((i) => !selected.has(i.id)));
-    setSelected(new Set());
-    setActionLoading(null);
+    try {
+      setError(null);
+      await deleteFromTrash(ids);
+      setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
+      setSelected(new Set());
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to delete selected media permanently."));
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function handleEmptyTrash() {
-    if (!confirm("Are you sure you want to permanently delete all items in trash?")) return;
     setActionLoading("empty");
 
-    await emptyTrash();
-    setItems([]);
-    setSelected(new Set());
-    setNextCursor(undefined);
-    setActionLoading(null);
+    try {
+      setError(null);
+      await emptyTrash();
+      setItems([]);
+      setSelected(new Set());
+      setNextCursor(undefined);
+      inFlightCursorRef.current = null;
+      loadedCursorsRef.current.clear();
+      lastTriggerScrollYRef.current = -1;
+      setShowEmptyConfirm(false);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to empty trash."));
+    } finally {
+      setActionLoading(null);
+    }
   }
 
+  const filteredItems = useMemo(() => {
+    if (!searchKey) return items;
+
+    return items.filter((item) => {
+      const title = item.title.toLowerCase();
+      const type = item.type.toLowerCase();
+      return title.includes(searchKey) || type.includes(searchKey);
+    });
+  }, [items, searchKey]);
+
   return (
-    <div className="min-h-screen p-4 sm:p-6 bg-bg-app">
+    <div className="w-full p-4 sm:p-6 bg-bg-app">
       <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-primary">Trash</h1>
-            <p className="text-text-secondary text-sm mt-1">
-              Items in trash will be permanently deleted after 30 days
-            </p>
-          </div>
-
-          {items.length > 0 && (
-            <button
-              onClick={handleEmptyTrash}
-              disabled={actionLoading === "empty"}
-              className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 bg-bg-muted text-text-secondary rounded-lg text-sm font-medium hover:bg-surface-selected transition-colors disabled:opacity-50 w-full sm:w-auto"
-            >
-              {actionLoading === "empty" ? (
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              )}
-              Empty Trash
-            </button>
-          )}
-        </div>
-
-        {items.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-20 h-20 rounded-full bg-bg-muted flex items-center justify-center mb-4">
-              <svg className="w-10 h-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
-            <p className="text-text-secondary font-medium mb-1">Trash is empty</p>
-            <p className="text-text-muted text-sm">Deleted items will appear here</p>
+        {error && (
+          <div className="mb-4 rounded-lg bg-bg-destructive px-3 py-2 text-sm text-text-destructive-foreground">
+            {error}
           </div>
         )}
+        <div className="sticky top-16 z-20 mb-6 bg-bg-app pb-4 pt-2 sm:mb-8">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-primary">Trash</h1>
+              <p className="text-text-secondary text-sm mt-1">
+                Items in trash will be permanently deleted after 30 days
+              </p>
+              {searchKey && (
+                <p className="text-xs text-text-muted mt-2">
+                  Searching trash for: <span className="font-medium text-text-primary">{searchQuery.trim()}</span>
+                </p>
+              )}
+            </div>
 
-        {items.length > 0 && (
-          <>
-            {/* Selection Action Bar */}
-            {selected.size > 0 && (
-              <div className="mb-6 flex items-center gap-4 bg-surface-raised border border-border-subtle p-4 rounded-xl shadow-sm">
-                <span className="text-text-primary font-medium">{selected.size} selected</span>
+            {items.length > 0 && (
+              <button
+                onClick={() => setShowEmptyConfirm(true)}
+                disabled={actionLoading === "empty"}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-bg-muted text-text-secondary rounded-lg text-sm font-medium hover:bg-surface-selected transition-colors disabled:opacity-50 w-full sm:w-auto"
+              >
+                {actionLoading === "empty" ? (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+                Empty Trash
+              </button>
+            )}
+          </div>
 
-                <div className="flex-1" />
+          {selected.size > 0 && (
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border-subtle bg-surface-raised p-4 shadow-sm sm:flex-row sm:items-center sm:gap-4">
+              <span className="text-text-primary font-medium">{selected.size} selected</span>
 
+              <div className="hidden flex-1 sm:block" />
+
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <button
                   onClick={handleRecover}
                   disabled={actionLoading === "recover"}
-                  className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-success text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto"
                 >
                   {actionLoading === "recover" ? (
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
@@ -150,9 +257,9 @@ export default function TrashPage() {
                 </button>
 
                 <button
-                  onClick={handleDeletePermanent}
+                  onClick={() => setShowDeleteConfirm(true)}
                   disabled={actionLoading === "delete"}
-                  className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-bg-destructive text-text-destructive-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-bg-destructive px-4 py-2 text-sm font-medium text-text-destructive-foreground transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto"
                 >
                   {actionLoading === "delete" ? (
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
@@ -167,11 +274,34 @@ export default function TrashPage() {
                   Delete Permanently
                 </button>
               </div>
-            )}
+            </div>
+          )}
+        </div>
 
+        {items.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-20 h-20 rounded-full bg-bg-muted flex items-center justify-center mb-4">
+              <svg className="w-10 h-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <p className="text-text-secondary font-medium mb-1">Trash is empty</p>
+            <p className="text-text-muted text-sm">Deleted items will appear here</p>
+          </div>
+        )}
+
+        {items.length > 0 && filteredItems.length === 0 && searchKey && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-text-secondary font-medium mb-1">No trash items match your search</p>
+            <p className="text-text-muted text-sm">Try a different term</p>
+          </div>
+        )}
+
+        {items.length > 0 && (
+          <>
             {/* Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {items.map((item) => {
+              {filteredItems.map((item) => {
                 const isSelected = selected.has(item.id);
 
                 return (
@@ -179,8 +309,8 @@ export default function TrashPage() {
                     key={item.id}
                     onClick={() => toggleSelect(item.id)}
                     className={`cursor-pointer group relative rounded-xl overflow-hidden bg-surface-raised border transition-all ${isSelected
-                        ? "border-accent-primary ring-2 ring-accent-primary ring-offset-2 ring-offset-bg-app"
-                        : "border-border-subtle hover:border-border-strong"
+                      ? "border-accent-primary ring-2 ring-accent-primary ring-offset-2 ring-offset-bg-app"
+                      : "border-border-subtle hover:border-border-strong"
                       }`}
                   >
                     <div className="relative aspect-square bg-bg-muted">
@@ -194,8 +324,8 @@ export default function TrashPage() {
                       <div className={`absolute top-2 left-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                         <div
                           className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected
-                              ? "bg-accent-primary border-accent-primary"
-                              : "bg-black/30 border-white/70 backdrop-blur-sm"
+                            ? "bg-accent-primary border-accent-primary"
+                            : "bg-black/30 border-white/70 backdrop-blur-sm"
                             }`}
                         >
                           {isSelected && (
@@ -230,31 +360,51 @@ export default function TrashPage() {
               })}
             </div>
 
-            {/* Load More */}
-            {nextCursor && (
+            {/* Infinite scroll sentinel */}
+            {nextCursor && <div ref={sentinelRef} className="h-1" />}
+
+            {loadingMore && (
               <div className="mt-10 flex justify-center">
-                <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-bg-muted text-text-primary rounded-lg font-medium hover:bg-surface-selected transition-colors disabled:opacity-50"
-                >
-                  {loadingMore ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Loading...
-                    </>
-                  ) : (
-                    "Load More"
-                  )}
-                </button>
+                <div className="inline-flex items-center gap-2 px-6 py-2.5 bg-bg-muted text-text-primary rounded-lg font-medium">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Loading...
+                </div>
               </div>
             )}
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        tone="destructive"
+        title={`Delete ${selected.size} selected ${selected.size === 1 ? "item" : "items"} permanently?`}
+        description="This action cannot be undone."
+        confirmLabel="Yes, delete"
+        noLabel="No"
+        cancelLabel="Cancel"
+        busy={actionLoading === "delete"}
+        onConfirm={() => void handleDeletePermanent()}
+        onNo={() => setShowDeleteConfirm(false)}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={showEmptyConfirm}
+        tone="destructive"
+        title="Empty trash permanently?"
+        description="All items in trash will be permanently deleted and cannot be recovered."
+        confirmLabel="Yes, empty trash"
+        noLabel="No"
+        cancelLabel="Cancel"
+        busy={actionLoading === "empty"}
+        onConfirm={() => void handleEmptyTrash()}
+        onNo={() => setShowEmptyConfirm(false)}
+        onCancel={() => setShowEmptyConfirm(false)}
+      />
     </div>
   );
 }
@@ -275,4 +425,12 @@ function formatDuration(seconds: number) {
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString();
+}
+
+function getUniqueTrashItems(items: TrashItem[]) {
+  const map = new Map<string, TrashItem>();
+  for (const item of items) {
+    map.set(item.id, item);
+  }
+  return Array.from(map.values());
 }

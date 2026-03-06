@@ -5,11 +5,14 @@ import {
   Gallery,
   MediaViewer,
   Trash,
-  Albums
+  Albums,
+  AlbumDetails,
+  Uploads,
+  AccountAndSettings,
+  SharedWithMe,
+  MyShares,
+  NotFound,
 } from "@/pages";
-import Uploads from "@/pages/Uploads";
-import AccountAndSettings from "@/pages/AccountAndSettings";
-import NotFound from "@/pages/NotFound";
 import { AppLayout } from "@/components/layout";
 
 // Reusable route config for media pages
@@ -59,8 +62,25 @@ export const router = createBrowserRouter([
       {
         path: "/albums",
         element: <Albums />
+      },
+      {
+        path: "/albums/:albumId",
+        element: <AlbumDetails />,
+        children: mediaRouteChildren
+      },
+      {
+        path: "/shared",
+        element: <SharedWithMe />
+      },
+      {
+        path: "/my-shares",
+        element: <MyShares />
       }
     ]
+  },
+  {
+    path: "/public/:token",
+    element: <MediaViewer />
   },
   {
     path: "*",

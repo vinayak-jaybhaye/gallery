@@ -26,7 +26,7 @@ export default function NotFound() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-bg-muted text-text-secondary text-sm font-medium hover:bg-surface-selected hover:text-text-primary transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-bg-muted text-text-secondary text-sm font-medium hover:bg-surface-selected hover:text-text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Go back
@@ -34,7 +34,7 @@ export default function NotFound() {
 
           <button
             onClick={() => navigate("/gallery")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent-primary text-text-inverse text-sm font-medium hover:bg-accent-strong transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent-primary text-text-inverse text-sm font-medium hover:bg-accent-strong transition-colors"
           >
             <Home className="w-4 h-4" />
             Go to Gallery

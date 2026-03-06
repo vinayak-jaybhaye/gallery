@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginWithGoogle, loginWithEmailPassword } from "@/api/auth";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthStore } from "@/store/authStore";
+import { getErrorMessage } from "@/lib/utils";
 import { Shield, Cloud, Smartphone } from "lucide-react";
 import Logo from "@/components/Logo";
 
@@ -31,7 +32,7 @@ const features = [
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, user } = useAuth();
+  const { login, user } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -68,14 +69,12 @@ export default function Login() {
   async function handleCredentialResponse(response: any) {
     try {
       setError(null);
-      console.log(response.credential);
       const data = await loginWithGoogle(response.credential);
-      console.log(data);
       login(data);
 
       navigate("/gallery");
     } catch (error) {
-      setError("Login failed. Please try again.");
+      setError(getErrorMessage(error, "Login failed. Please try again."));
     }
   }
 
@@ -93,8 +92,8 @@ export default function Login() {
       const data = await loginWithEmailPassword(email, password);
       login(data);
       navigate("/gallery");
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid email or password.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Invalid email or password."));
     } finally {
       setLoading(false);
     }
@@ -218,7 +217,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="cursor-pointer w-full bg-accent-primary text-text-inverse py-3 rounded-xl font-semibold hover:bg-accent-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
+                className="w-full bg-accent-primary text-text-inverse py-3 rounded-xl font-semibold hover:bg-accent-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
               >
                 {loading ? (
                   <>

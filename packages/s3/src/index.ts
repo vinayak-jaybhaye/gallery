@@ -14,6 +14,9 @@ export function createS3Client(config: S3Config): S3Client {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
+    // Prevent optional checksum query params in presigned PUT URLs.
+    // Those params can cause LocalStack to reject browser uploads.
+    requestChecksumCalculation: "WHEN_REQUIRED",
   };
 
   if (config.endpoint) {

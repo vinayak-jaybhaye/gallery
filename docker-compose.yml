@@ -33,7 +33,7 @@ services:
     restart: "no"
 
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:3
     container_name: gallery-localstack
     restart: unless-stopped
     ports:

@@ -6,6 +6,8 @@ import path from "path";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Load VITE_* vars from monorepo root .env (same file as API)
+  envDir: path.resolve(__dirname, "../.."),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

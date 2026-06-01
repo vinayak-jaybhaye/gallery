@@ -48,22 +48,54 @@ export default function Login() {
   }, [user, navigate]);
 
   useEffect(() => {
-    if (!window.google || googleInitialized.current) return;
+    if (googleInitialized.current) return;
 
-    googleInitialized.current = true;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setError("Google sign-in is not configured (missing VITE_GOOGLE_CLIENT_ID).");
+      return;
+    }
 
-    window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse,
-    });
+    const initGoogleSignIn = () => {
+      if (!window.google?.accounts?.id || googleInitialized.current) return false;
 
-    window.google.accounts.id.renderButton(
-      document.getElementById("google-button"),
-      {
-        theme: "outline",
-        size: "large",
+      googleInitialized.current = true;
+
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleCredentialResponse,
+      });
+
+      const buttonContainer = document.getElementById("google-button");
+      if (buttonContainer) {
+        window.google.accounts.id.renderButton(buttonContainer, {
+          theme: "outline",
+          size: "large",
+        });
       }
-    );
+
+      return true;
+    };
+
+    if (initGoogleSignIn()) return;
+
+    const intervalId = window.setInterval(() => {
+      if (initGoogleSignIn()) {
+        window.clearInterval(intervalId);
+      }
+    }, 100);
+
+    const timeoutId = window.setTimeout(() => {
+      window.clearInterval(intervalId);
+      if (!googleInitialized.current) {
+        setError("Google sign-in failed to load. Check your network or ad blocker.");
+      }
+    }, 10_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
   }, []);
 
   async function handleCredentialResponse(response: any) {

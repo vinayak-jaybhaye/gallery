@@ -126,7 +126,7 @@ export default function Sidebar({
         </nav>
 
         {/* Logo - Fixed at bottom */}
-        <Logo className={`${collapsed && "hidden"}`} />
+        {/* <Logo className={`${collapsed && "hidden"}`} /> */}
       </aside>
     </>
   );

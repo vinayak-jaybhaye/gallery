@@ -10,6 +10,7 @@
   "type": "commonjs",
   "dependencies": {
     "@gallery/db": "workspace:*",
+    "@gallery/queue": "workspace:*",
     "@gallery/s3": "workspace:*",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",

@@ -1,3 +1,4 @@
+import { enqueueMediaProcessingJob } from "@gallery/queue";
 import { prisma } from "@/lib/prisma";
 import { s3Client } from "@/lib/s3";
 import {
@@ -227,6 +228,8 @@ export async function completeUploadService({
     }),
   ]);
 
+  await enqueueMediaProcessingJob(mediaId);
+
   return { success: true };
 }
 
@@ -423,5 +426,31 @@ export async function listUploadSessionsService({
 //   });
 // }
 
+/*
+ * CONTEXT — why these cleanup jobs matter (not implemented yet):
+ *
+ * Media stays status "uploading" until POST /:id/complete succeeds. There is no DB "failed"
+ * upload state. The web uploadStore may show "failed", but that is client-only.
+ *
+ * - Single upload (no UploadSession): user can abandon or PUT succeeds but complete fails →
+ *   orphan Media + possible S3 original. DELETE /uploads/:id (abort) does not apply.
+ * - Multipart/streaming: UploadSession expires after 3 days (part-urls rejected); rows and S3
+ *   multipart are not removed automatically. User can abort via DELETE /uploads/:id (see
+ *   abortUploadService) while status is still "uploading".
+ *
+ * Orphans do not appear in the library (API lists ready/processing only). Without the jobs
+ * above, stale uploading rows and S3 objects accumulate until manual abort or a future cron.
+ *
+ * FIX (short):
+ * 1) Single-upload TODO — hourly job: find stale uploading + no UploadSession (e.g. createdAt
+ *    > UPLOAD_STALE_HOURS ago) → DeleteObject(originalKey) if present → prisma.media.delete.
+ * 2) Multipart TODO — same job: find UploadSession.expiresAt < now → AbortMultipartUpload →
+ *    prisma.media.delete (cascade session). Uncomment/adapt loops above.
+ * 3) Also extend abortUploadService: no session but status uploading → delete S3 original +
+ *    media (so UI “discard” works for single PUT). Wire web failed upload → DELETE /uploads/:id.
+ *
+ * Processing stuck after 3 BullMQ fails is separate (media-worker): add processing_failed status,
+ * set on final job failure, remove failed Redis job before re-enqueue, POST retry-processing.
+ */
 
 // TODO::LATER ADD S3 EVENT NOTIFICATIONS (SQS/SNS)

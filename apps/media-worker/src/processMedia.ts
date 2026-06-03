@@ -21,5 +21,6 @@ export async function processMedia(media: any) {
     console.log("Done:", media.id);
   } catch (err) {
     console.error("Processing failed:", err);
+    throw err;
   }
 }

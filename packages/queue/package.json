@@ -1,0 +1,20 @@
+{
+  "name": "@gallery/queue",
+  "version": "1.0.0",
+  "description": "Redis + BullMQ queues for Gallery",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "license": "ISC",
+  "packageManager": "pnpm@10.29.2",
+  "dependencies": {
+    "bullmq": "^5.69.3",
+    "ioredis": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "typescript": "^5.9.3"
+  }
+}

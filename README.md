@@ -4,7 +4,7 @@ A pnpm monorepo for a photo/video gallery with direct-to-S3 uploads and backgrou
 
 ## Documentation
 
-**Developer documentation:** [apps/docs/README.md](./apps/docs/README.md)
+**Developer documentation:** [apps/docs/README.md](./docs/README.md)
 
 Covers architecture, local setup, API routes, web upload pipeline, BullMQ worker, and the Prisma data model.
 
@@ -37,7 +37,7 @@ pnpm dev
 - Web: http://localhost:5173  
 - API: http://localhost:3000/health  
 
-See [getting started](./apps/docs/01-overview/getting-started.md) for env vars and troubleshooting.
+See [getting started](./docs/01-overview/getting-started.md) for env vars and troubleshooting.
 
 ## Scripts
 
@@ -56,6 +56,6 @@ See [getting started](./apps/docs/01-overview/getting-started.md) for env vars a
 
 | Package | Description |
 |---------|-------------|
-| `@gallery/db` | [docs](./apps/docs/03-packages/db.md) |
-| `@gallery/s3` | [docs](./apps/docs/03-packages/s3.md) |
-| `@gallery/queue` | [docs](./apps/docs/03-packages/queue.md) |
+| `@gallery/db` | [docs](./docs/03-packages/db.md) |
+| `@gallery/s3` | [docs](./docs/03-packages/s3.md) |
+| `@gallery/queue` | [docs](./docs/03-packages/queue.md) |

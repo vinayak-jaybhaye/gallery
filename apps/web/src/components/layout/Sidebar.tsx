@@ -8,7 +8,6 @@ import {
   Upload,
   Cloud,
 } from "lucide-react";
-import Logo from "../Logo";
 
 const mainNavItems = [
   { path: "/gallery", icon: Image, label: "Photos" },

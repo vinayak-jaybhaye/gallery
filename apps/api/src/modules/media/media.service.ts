@@ -6,9 +6,7 @@ import {
   GetObjectCommand,
   DeleteObjectsCommand
 } from "@aws-sdk/client-s3";
-import {
-  getSignedUrl
-} from "@aws-sdk/s3-request-presigner";
+import { getSignedUrl } from "@/lib/s3";
 import { encodeTimeIdCursor, TimeIdCursor } from "@/utils/paginationCursor";
 
 const BUCKET = process.env.S3_BUCKET!;

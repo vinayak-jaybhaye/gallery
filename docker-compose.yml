@@ -17,21 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  db-migrate:
-    image: node:20-alpine
-    container_name: gallery-db-migrate
-    depends_on:
-      db:
-        condition: service_healthy
-    working_dir: /workspace
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/gallery
-    volumes:
-      - ./:/workspace
-    command: >
-      sh -c "corepack enable && pnpm --filter @gallery/db exec prisma migrate deploy"
-    restart: "no"
-
   redis:
     image: redis:7-alpine
     container_name: gallery-redis
@@ -58,6 +43,88 @@ services:
       - localstack-data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
       - ./localstack-init.sh:/etc/localstack/init/ready.d/10-localstack-init.sh:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-migrate:
+    image: node:20-alpine
+    container_name: gallery-db-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /workspace
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/gallery
+    volumes:
+      - ./:/workspace
+    command: >
+      sh -c "corepack enable && pnpm --filter @gallery/db exec prisma migrate deploy"
+    restart: "no"
+
+  # ── Application services ──────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: gallery-api
+    restart: unless-stopped
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/gallery
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://localstack:4566
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:4566}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - "3000:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: gallery-worker
+    restart: unless-stopped
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/gallery
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://localstack:4566
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:4566}
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+    container_name: gallery-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
 
 volumes:
   pgdata:

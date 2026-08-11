@@ -1,0 +1,42 @@
+# Cloud deployment — app services only
+# Infrastructure (Postgres, Redis, S3) is managed externally
+#
+# Usage:
+#   1. Update .env with the CLOUD block values
+#   2. docker compose -f docker-compose.cloud.yml up --build -d
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: gallery-api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: gallery-worker
+    restart: unless-stopped
+    env_file: .env
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+    container_name: gallery-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"

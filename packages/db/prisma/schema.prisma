@@ -52,7 +52,7 @@ model Media {
   albums        Album[]
 
   @@index([ownerId, deletedAt(sort: Desc), id], where: { deletedAt: { not: null } })
-  @@index([ownerId, status, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc), id(sort: Desc), status])
 }
 
 model UploadSession {

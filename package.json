@@ -17,7 +17,13 @@
     "cloud:up": "docker compose -f docker-compose.cloud.yml up -d --build",
     "cloud:down": "docker compose -f docker-compose.cloud.yml down",
     "cloud:logs": "docker compose -f docker-compose.cloud.yml logs -f",
-    "dev": "docker compose up --build"
+    "dev": "docker compose up --build",
+    "bench": "dotenv -e .env -- pnpm --filter bench run bench",
+    "bench:api": "dotenv -e .env -- pnpm --filter bench run bench:api",
+    "bench:worker": "dotenv -e .env -- pnpm --filter bench run bench:worker",
+    "bench:db": "dotenv -e .env -- pnpm --filter bench run bench:db",
+    "bench:s3": "dotenv -e .env -- pnpm --filter bench run bench:s3",
+    "bench:concurrent": "dotenv -e .env -- pnpm --filter bench run bench:concurrent"
   },
   "packageManager": "pnpm@10.29.2",
   "devDependencies": {

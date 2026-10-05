@@ -1,0 +1,26 @@
+{
+  "name": "bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "bench": "tsx src/runner.ts",
+    "bench:api": "tsx src/runner.ts --suite api-latency",
+    "bench:worker": "tsx src/runner.ts --suite worker-pipeline",
+    "bench:db": "tsx src/runner.ts --suite db-queries",
+    "bench:s3": "tsx src/runner.ts --suite s3-upload",
+    "bench:concurrent": "tsx src/runner.ts --suite concurrent-users"
+  },
+  "dependencies": {
+    "@gallery/db": "workspace:*",
+    "@gallery/queue": "workspace:*",
+    "@gallery/s3": "workspace:*",
+    "axios": "^1.9.0",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}

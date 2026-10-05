@@ -31,3 +31,7 @@ Thumbs.db
 
 # Prisma
 **/generated/prisma
+sample-media
+
+# Benchmark results
+apps/bench/results/

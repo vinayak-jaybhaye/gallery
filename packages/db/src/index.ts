@@ -5,12 +5,12 @@ export interface DbConfig {
   connectionString: string;
 }
 
-export function createPrismaClient(config: DbConfig) {
+export function createPrismaClient(config: DbConfig, options?: any) {
   const adapter = new PrismaPg({
     connectionString: config.connectionString,
   });
 
-  return new PrismaClient({ adapter });
+  return new PrismaClient({ adapter, ...options });
 }
 
 // Re-export Prisma types for convenience

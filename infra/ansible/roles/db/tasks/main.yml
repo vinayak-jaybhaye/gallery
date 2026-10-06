@@ -1,0 +1,28 @@
+---
+# DB role: PostgreSQL + Redis via Docker Compose
+- name: Create app directory
+  ansible.builtin.file:
+    path: /home/ec2-user/gallery-db
+    state: directory
+    owner: ec2-user
+
+- name: Deploy docker-compose for DB
+  ansible.builtin.template:
+    src: docker-compose.db.yml.j2
+    dest: /home/ec2-user/gallery-db/docker-compose.yml
+    owner: ec2-user
+
+- name: Start PostgreSQL and Redis
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: /home/ec2-user/gallery-db
+  become_user: ec2-user
+
+- name: Wait for PostgreSQL to be ready
+  ansible.builtin.shell: |
+    for i in $(seq 1 30); do
+      docker exec gallery-db pg_isready -U {{ db_user }} -d {{ db_name }} && exit 0
+      sleep 2
+    done
+    exit 1
+  become_user: ec2-user

@@ -1,0 +1,10 @@
+# Worker-only deployment
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: gallery-worker
+    restart: unless-stopped
+    env_file: .env

@@ -35,3 +35,15 @@ sample-media
 
 # Benchmark results
 apps/bench/results/
+
+# Infrastructure - Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+*.auto.tfvars
+
+# Infrastructure - Ansible
+infra/ansible/inventory.ini
+*.retry

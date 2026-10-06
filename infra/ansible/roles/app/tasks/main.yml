@@ -1,0 +1,58 @@
+---
+# App role: API + Web + Nginx + DB migration
+- name: Create app directory
+  ansible.builtin.file:
+    path: /home/ec2-user/gallery
+    state: directory
+    owner: ec2-user
+
+- name: Clone gallery repo
+  ansible.builtin.git:
+    repo: "https://github.com/vinayak-jaybhaye/gallery.git"
+    dest: /home/ec2-user/gallery
+    version: main
+    force: true
+  become_user: ec2-user
+
+- name: Deploy .env file
+  ansible.builtin.template:
+    src: env.app.j2
+    dest: /home/ec2-user/gallery/.env
+    owner: ec2-user
+    mode: "0600"
+
+- name: Deploy cloud docker-compose override
+  ansible.builtin.template:
+    src: docker-compose.app.yml.j2
+    dest: /home/ec2-user/gallery/docker-compose.cloud.yml
+    owner: ec2-user
+
+- name: Build app containers
+  ansible.builtin.shell: docker compose -f docker-compose.cloud.yml build
+  args:
+    chdir: /home/ec2-user/gallery
+  become_user: ec2-user
+
+- name: Run database migrations
+  ansible.builtin.shell: |
+    docker compose -f docker-compose.cloud.yml run --rm \
+      -e DATABASE_URL="postgresql://{{ db_user }}:{{ db_password }}@{{ db_private_ip }}:5432/{{ db_name }}" \
+      api sh -c "cd /app && npx pnpm --filter @gallery/db exec prisma migrate deploy"
+  args:
+    chdir: /home/ec2-user/gallery
+  become_user: ec2-user
+
+- name: Start app containers
+  ansible.builtin.shell: docker compose -f docker-compose.cloud.yml up -d --force-recreate
+  args:
+    chdir: /home/ec2-user/gallery
+  become_user: ec2-user
+
+- name: Wait for API to be healthy
+  ansible.builtin.uri:
+    url: "http://localhost:3000/health"
+    return_content: true
+  register: health
+  until: health.status == 200
+  retries: 30
+  delay: 5

@@ -1,0 +1,34 @@
+---
+# Worker role: media-worker via Docker
+- name: Create worker directory
+  ansible.builtin.file:
+    path: /home/ec2-user/gallery
+    state: directory
+    owner: ec2-user
+
+- name: Clone gallery repo
+  ansible.builtin.git:
+    repo: "https://github.com/vinayak-jaybhaye/gallery.git"
+    dest: /home/ec2-user/gallery
+    version: main
+    force: true
+  become_user: ec2-user
+
+- name: Deploy .env file
+  ansible.builtin.template:
+    src: env.worker.j2
+    dest: /home/ec2-user/gallery/.env
+    owner: ec2-user
+    mode: "0600"
+
+- name: Deploy worker docker-compose
+  ansible.builtin.template:
+    src: docker-compose.worker.yml.j2
+    dest: /home/ec2-user/gallery/docker-compose.worker.yml
+    owner: ec2-user
+
+- name: Build and start worker container
+  ansible.builtin.shell: docker compose -f docker-compose.worker.yml up -d --build
+  args:
+    chdir: /home/ec2-user/gallery
+  become_user: ec2-user

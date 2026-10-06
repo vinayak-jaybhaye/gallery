@@ -1,0 +1,27 @@
+---
+# Main playbook: deploy Gallery to AWS EC2
+# Usage: ansible-playbook -i inventory.ini site.yml
+
+- name: Setup all instances (Docker + dependencies)
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Setup Database (PostgreSQL + Redis)
+  hosts: db
+  become: true
+  roles:
+    - db
+
+- name: Setup App (API + Web)
+  hosts: app
+  become: true
+  roles:
+    - app
+
+- name: Setup Worker (Media processing)
+  hosts: worker
+  become: true
+  roles:
+    - worker

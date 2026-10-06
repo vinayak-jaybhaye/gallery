@@ -1,0 +1,36 @@
+# Ansible inventory example template
+# Copy this to inventory.ini and populate with your values:
+#   cp inventory.ini.example inventory.ini
+# Or run ./generate-inventory.sh to populate automatically from Terraform outputs.
+
+[db]
+db-server ansible_host=REPLACE_WITH_DB_PUBLIC_IP
+
+[app]
+app-server ansible_host=REPLACE_WITH_APP_PUBLIC_IP
+
+[worker]
+worker-server ansible_host=REPLACE_WITH_WORKER_PUBLIC_IP
+
+[all:vars]
+ansible_user=ec2-user
+ansible_ssh_private_key_file=~/keys/sandbox-key.pem
+
+# Database config
+db_private_ip=REPLACE_WITH_DB_PRIVATE_IP
+db_password=REPLACE_WITH_DB_PASSWORD
+db_name=gallery
+db_user=gallery
+
+# S3 config
+aws_region=ap-south-1
+s3_bucket_name=REPLACE_WITH_S3_BUCKET
+s3_access_key_id=REPLACE_WITH_S3_ACCESS_KEY
+s3_secret_access_key=REPLACE_WITH_S3_SECRET_KEY
+
+# App config
+jwt_secret=REPLACE_WITH_JWT_SECRET
+app_public_ip=REPLACE_WITH_APP_PUBLIC_IP
+
+google_client_id=REPLACE_WITH_GOOGLE_CLIENT_ID
+google_client_secret=REPLACE_WITH_GOOGLE_CLIENT_SECRET

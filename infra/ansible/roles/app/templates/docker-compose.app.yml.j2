@@ -1,0 +1,27 @@
+# Cloud deployment — API + Web only (DB and Worker on separate instances)
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: gallery-api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_API_URL: "http://{{ app_public_ip }}:3000"
+        VITE_GOOGLE_CLIENT_ID: "{{ google_client_id | default(GOOGLE_CLIENT_ID | default('')) }}"
+    container_name: gallery-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"

@@ -1,0 +1,49 @@
+---
+# Common role: install Docker on Amazon Linux 2023
+- name: Install Docker
+  ansible.builtin.dnf:
+    name:
+      - docker
+      - git
+    state: present
+
+- name: Start and enable Docker
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Add ec2-user to docker group
+  ansible.builtin.user:
+    name: ec2-user
+    groups: docker
+    append: true
+
+- name: Create docker cli-plugins directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /usr/local/lib/docker/cli-plugins
+    - /usr/libexec/docker/cli-plugins
+
+- name: Install Docker Compose plugin
+  ansible.builtin.shell: |
+    curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    cp -f /usr/local/lib/docker/cli-plugins/docker-compose /usr/libexec/docker/cli-plugins/docker-compose
+  args:
+    creates: /usr/local/lib/docker/cli-plugins/docker-compose
+
+- name: Install Docker Buildx plugin
+  ansible.builtin.shell: |
+    BUILDX_VER=$(curl -sI https://github.com/docker/buildx/releases/latest | awk -F'/' '/[Ll]ocation:/ {print $NF}' | tr -d '\r')
+    if [ -z "$BUILDX_VER" ]; then BUILDX_VER="v0.37.2"; fi
+    curl -SL "https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-amd64" \
+      -o /usr/local/lib/docker/cli-plugins/docker-buildx
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+    cp -f /usr/local/lib/docker/cli-plugins/docker-buildx /usr/libexec/docker/cli-plugins/docker-buildx
+  args:
+    creates: /usr/local/lib/docker/cli-plugins/docker-buildx

@@ -2,6 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 import { matchPasswords } from "@/utils/password";
+import { AppError } from "@/middlewares/error.middleware";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -13,7 +14,7 @@ export async function handleGoogleAuth(idToken: string) {
 
   const payload = ticket.getPayload();
   if (!payload || !payload.email) {
-    throw new Error("Invalid Google token");
+    throw new AppError("Invalid Google token", 401);
   }
 
   const { email, picture } = payload;
@@ -76,16 +77,16 @@ export async function handleCredentialsLogin(email: string, password: string) {
   });
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    throw new AppError("Invalid credentials", 401);
   }
 
   if (user.passwordAuthEnabled === false || !user.passwordHash) {
-    throw new Error("Password authentication is disabled for this user");
+    throw new AppError("Password authentication is disabled for this user", 401);
   }
 
   const isPasswordValid = await matchPasswords(password, user.passwordHash);
   if (!isPasswordValid) {
-    throw new Error("Invalid credentials");
+    throw new AppError("Invalid credentials", 401);
   }
 
   const jwtSecret = process.env.JWT_SECRET;
